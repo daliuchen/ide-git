@@ -1,0 +1,21 @@
+.gl-tooltip {
+  position: fixed;
+  z-index: 10000;
+  max-width: min(420px, calc(100vw - 12px));
+  padding: 4px 8px;
+  border: 1px solid var(--vscode-editorHoverWidget-border, var(--vscode-widget-border, #454545));
+  border-radius: 4px;
+  background: var(--vscode-editorHoverWidget-background, #252526);
+  color: var(--vscode-editorHoverWidget-foreground, var(--vscode-foreground, #ccc));
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.36));
+  font-family: var(--vscode-font-family);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
+.gl-tooltip[hidden] {
+  display: none;
+}
