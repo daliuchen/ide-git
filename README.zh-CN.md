@@ -1,78 +1,204 @@
 # Git Log Plus
 
-基于 [ascenx/vscode-git-log](https://github.com/ascenx/vscode-git-log)（MIT）改造，目标是在 VS Code / Cursor 里提供完整的 IDE 级 Git 工作流。原版 Git Log 的功能全部保留，下面是新增部分。
-
-## 本 fork 新增
-
-**Commit 工具窗口**（活动栏 → Commit，或命令 `Git Log: Commit…`）
-
-- 本地改动按目录树展示（单子目录链合并显示，如 `src/commit`），可切换平铺；按 changelist 分组，多仓库时再按仓库分组；冲突文件、未跟踪文件各自成组。
-- 文件、目录、changelist 都有勾选框（三态）。提交的是勾选文件在工作区的内容，与暂存区无关（`git commit --only`）。
-- **按块提交**：展开修改过的文件可看到每个改动块，各自勾选；没勾的块留在本地。
-- Changelist：新建、重命名、删除、设为活动、移动文件（Alt+Shift+M）。新改动进入活动 changelist，默认勾选。
-- 提交信息带历史、Amend（自动带出上次信息）、Sign-off、Commit / Commit and Push…（Ctrl/Cmd+Enter，加 Alt 为推送）；草稿按工作区保存。
-- 按行提交：展开改动块可逐行勾选；块可以移到别的 changelist（文件会同时出现在两个 changelist 下）；文件可拖到 changelist 上；changelist 描述会预填提交信息。
-- 提交选项（齿轮按钮）：Author、Run Git hooks，以及提交前检查——Reformat code、Optimize imports、Analyze code（有错误/警告就停下）、Check TODO、Run tests（`gitLogWorkbench.commit.testCommand`）。
-- 读取 `commit.template` 预填提交信息；检查首行长度、正文行长、首行后空行，可一键折行。
-- Rollback 可选择同时删除新增文件。
-- 编辑器右键：Commit This Change…、Amend This Change into Last Commit（提交光标所在的改动）。
-- 右键：Show Diff、Jump to Source（F4）、Commit File…、Rollback…、Move to Another Changelist…、New Changelist…、Shelve Changes…（`git stash push -- <路径>`）、Add to VCS、Add to .gitignore、Delete、Show History、Copy Path；冲突文件有 Merge…、Accept Yours、Accept Theirs、Mark as Resolved。
-
-**可编辑、有 LSP 的 Diff**
-
-- Commit 视图里的 Diff 是 HEAD ↔ 真实文件，右侧可直接编辑，跳转定义、重命名、诊断等语言功能都能用。
-- Log 里打开的 Diff，只要该文件在提交里的版本与工作区一致，右侧就用真实文件。
-- 任何只读的历史版本都可以 Jump to Source（F4 或 Diff 工具栏按钮），打开本地文件并定位到对应行。
-- 文件、提交、分支都可以 Compare with Local（分支叫 Show Diff with Working Tree），本地一侧可编辑。
-
-**Log 新增操作**
-
-- 提交：Edit Commit Message…（任意提交；之后的提交以相同内容重建，不动工作区）、Fixup… / Squash Into…（在 Commit 视图里预填 `fixup!` / `squash!`）、Undo Commit（软重置，提交信息回到 Commit 视图）、Interactively Rebase from Here…（pick/reword/edit/squash/fixup/drop/调整顺序，本地改动自动 stash）、Push All up to Here…、Create Patch…、Compare with Local。
-- 变更文件：Compare with Local、Jump to Source、Show History for File、Revert Selected Changes、Cherry-Pick Selected Changes、Get from Revision、Drop Selected Changes…、Create Patch…。
-- 分支：Checkout and Rebase onto Current、Pull into Current Using Rebase/Merge、Update（不切换分支直接快进）、Show Diff with Working Tree。
-- 工具栏：Push…（对话框）、Update Project（Rebase/Merge）、Commit…。
-
-**对话框与弹出菜单**
-
-- Push 对话框：推送被拒时可选 Rebase and Push / Merge and Push；待推送提交及其文件，可改远程和目标分支（不存在时标 New），Set upstream、Push tags、Force push with lease。
-- 交互式 Rebase 对话框：快捷键 P/R/E/S/F/D、Alt+↑/↓，squash 组自动合并提交信息并可编辑。
-- `Git Log: Branches…`：选分支 → Checkout、New Branch from…、Checkout and Rebase、Rebase/Merge、Update、Push、Rename、Delete、Pull Using Rebase/Merge。
-- `Git Log: VCS Operations…`、`Git Log: Update Project…`、`Git Log: Push…`。
-
-**Annotate with Git Blame**
-
-- 编辑器右键 → Git Log → Annotate with Git Blame（行号区右键也有）：每行显示作者和日期，按新旧着色，未提交的行也标出；悬停可看提交信息、Show Diff、Copy Hash。
-
-建议快捷键（默认不绑定，因为会和编辑器自带快捷键冲突）见英文 README。
-
-本地安装：`pnpm install && pnpm run package`，然后 `cursor --install-extension git-log-plus-<版本>.vsix`。需先卸载原版 `ascenx.git-log`，两者注册了相同的视图和命令。
-
----
-
-# Git Log (original features)
-
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-[![Visual Studio Marketplace Version](https://vsmarketplacebadges.dev/version-short/ascenx.git-log.svg?label=Marketplace&color=007ACC)](https://marketplace.visualstudio.com/items?itemName=ascenx.git-log)
-[![Open VSX Version](https://img.shields.io/open-vsx/v/ascenx/git-log?label=Open%20VSX)](https://open-vsx.org/extension/ascenx/git-log)
+[![Open VSX Version](https://img.shields.io/open-vsx/v/daliuchen/git-log-plus?label=Open%20VSX)](https://open-vsx.org/extension/daliuchen/git-log-plus)
 
-一个面向 VS Code 的可视化 Git 日志、提交图谱、历史浏览和仓库操作扩展。
+给 **Cursor** 和 **VS Code** 用的 IDE 级 Git 工作流：真正的 Commit 工具窗口（changelist、按块/按行提交）、提交图谱 Log、交互式 rebase、Push 对话框、Annotate，以及右侧可编辑、语言功能完整的 Diff。
 
-Git Log 的目标不是给 VS Code 内置 Source Control 换一个皮肤，而是在 VS Code 中提供完整的 Git 日志工作流：左侧引用树、中央提交拓扑图、右侧变更文件树、提交详情、原生 Diff，以及围绕分支和提交的常用操作。
+基于 [ascenx/vscode-git-log](https://github.com/ascenx/vscode-git-log)（MIT）改造，原版 Git Log 的功能全部保留，见 [Git Log（原版功能）](#git-log原版功能)。
+
+![Commit 工具窗口](images/c1-commit-window.jpg)
+
+## 为什么做这个
+
+编辑器自带的「源代码管理」做 `git add` + `git commit` 够用，但下面这些就做不到或很别扭：
+
+- 只提交文件的**一部分**（某几个改动块、某几行），而且不碰暂存区。
+- 用 **changelist** 把不相关的改动分开，各自提交。
+- 看 Diff 时右侧就是**真实文件**，跳转定义、重命名、诊断照常能用；从 Diff 打开的不再是只读文件。
+- rebase、改提交信息、squash、撤销提交、推送，都在菜单和对话框里完成，不用切终端。
 
 ## 安装
 
-前往 [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=ascenx.git-log) 安装 **Git Log — Commit Graph & History**，也可以在 VS Code 扩展视图中搜索 `ascenx.git-log`。
+**从扩展市场装（Cursor / VS Code / VSCodium）**：打开扩展视图，搜索 **Git Log Plus**，安装 `daliuchen.git-log-plus`。
 
-Git Log 支持 VS Code 1.85.2 及更高版本，同时要求 Git 2.27 或更高版本。
-
-还可以通过命令行安装：
+**用 `.vsix` 文件装**：从 [GitHub Releases](https://github.com/daliuchen/git-log-plus/releases) 下载（或自己构建，见[本地开发](#本地开发)），然后执行命令 *Extensions: Install from VSIX…*，或者：
 
 ```bash
-code --install-extension ascenx.git-log
+cursor --install-extension git-log-plus-0.3.0.vsix   # VS Code 用 code --install-extension …
 ```
 
-## 功能截图
+> 如果装过原版 **Git Log**（`ascenx.git-log`），先卸载它——两者注册了相同的视图和命令。
+
+要求 VS Code 1.85+（当前的 Cursor 都满足）和 Git 2.27+。装好后执行一次 *Developer: Reload Window*。
+
+## 快速上手
+
+### 1. 打开 Commit 窗口
+
+- **VS Code**：点活动栏里的 **Commit** 图标。
+- **Cursor**：活动栏是横着的，在侧边栏顶部。看不到 Commit 图标时，点图标那一排最右边的 **⌄**，选 **Commit**。
+- 任何地方：命令面板 → `Git Log: Commit…`。
+
+小技巧：把 Commit 视图拖到右侧的辅助侧边栏，可以一直开着、和编辑器并排。
+
+### 2. 提交
+
+1. 勾选要提交的文件（或目录、整个 changelist）。新改动默认是勾上的。
+2. 双击文件（或 `Cmd/Ctrl+D`）看 Diff。右侧就是真实文件，发现问题直接改。
+3. 写提交信息，`Cmd/Ctrl+Enter` 提交；`Cmd/Ctrl+Alt+Enter` 是 **Commit and Push…**。
+
+提交的是**勾选项在工作区里的内容**，与暂存区无关（`git commit --only`）。
+
+### 3. 只提交文件的一部分
+
+展开修改过的文件，每个改动块都有自己的勾选框；再展开改动块，可以逐行勾选。没勾的块和行留在本地，不会被提交。
+
+![按行提交](images/n3-lines-and-options.jpg)
+
+### 4. 看历史
+
+打开底部面板的 **Git Log** 标签（`Git Log: Open Log`）。提交、文件、分支上右键就有各种操作，见下面的[常见操作](#常见操作)。
+
+![Log 右键菜单](images/c15-log-menu.jpg)
+
+## 常见操作
+
+| 我想… | 怎么做 |
+| --- | --- |
+| 提交几个文件 | Commit 窗口里勾上 → 写信息 → `Cmd/Ctrl+Enter` |
+| 只提交文件里的某几块 / 某几行 | Commit 窗口里展开文件（再展开改动块），只勾要的 |
+| 把两件事的改动分开 | 工具栏 **New Changelist…**，把文件拖过去（或改动块右键 → *Move to Another Changelist…*），各个 changelist 分别提交 |
+| 修改上一个提交 | 勾 **Amend**（自动带出上次的信息）再提交；或编辑器右键 → *Git Log → Amend This Change into Last Commit* |
+| 只提交光标处的这处改动 | 编辑器右键 → *Git Log → Commit This Change…* |
+| 撤销上一个提交、保留改动 | Log 里右键该提交 → **Undo Commit**（提交信息回到 Commit 窗口） |
+| 改某个旧提交的信息 | Log 里右键该提交 → **Edit Commit Message…**（不动工作区） |
+| squash / 调整顺序 / 删除提交 | Log 里右键要改的最早那个提交 → **Interactively Rebase from Here…** |
+| 把我的分支 rebase 到 `master` | 先 Fetch，再 `Git Log: Branches…` → 选 `origin/master` → **Rebase '当前分支' onto 'origin/master'**；或 Log 里右键 `origin/master` → **Rebase Current onto**；或选 `origin/master` → **Pull into '当前分支' Using Rebase**，一步完成 fetch + rebase。注意先提交或 Shelve 掉未提交的改动 |
+| 解决 rebase / merge 冲突 | 冲突文件在 Commit 窗口单独成组：*Merge…*、*Accept Yours*、*Accept Theirs*、*Mark as Resolved*；然后点 Log 顶部 rebase 提示条的 **Continue** |
+| 推送 | `Git Log: Push…` 或 **Commit and Push…**。被拒时选 **Rebase and Push** 或 **Merge and Push**；rebase 过的分支要勾 *Force push (with lease)* |
+| 把改动先收起来 | 文件右键 → **Shelve Changes…**（只收选中的文件） |
+| 丢弃本地改动 | 右键 → **Rollback…**（`Cmd/Ctrl+Alt+Z`）；新增的文件可以顺便删掉 |
+| 从别的提交 / 分支拿某个文件 | Log 里选中提交 → 文件右键 → **Get from Revision** / **Cherry-Pick Selected Changes** / **Revert Selected Changes** |
+| 从只读的旧版本跳到真实文件 | 按 **F4**（或 Diff 工具栏的按钮） |
+| 看每行是谁改的 | 编辑器右键 → *Git Log → Annotate with Git Blame* |
+| 切换 / 新建 / 删除分支 | `Git Log: Branches…` |
+
+## 功能
+
+### Commit 工具窗口
+
+- 改动按**目录树**展示（单子目录链合并，如 `src/commit`），可切换平铺；按 changelist 分组，多仓库时再按仓库分组；冲突文件、未跟踪文件各自成组。
+- changelist、目录、文件、改动块、行都有**三态勾选框**。
+- **Changelist**：新建、重命名、删除、设为活动、写描述（会预填提交信息）、在 changelist 之间移动文件或单个改动块（拆开的文件会同时出现在两边）、拖拽。新改动进入活动 changelist。
+- 提交信息带**历史**、**Amend**、**Sign-off**，草稿按工作区保存；支持 `commit.template`；检查首行长度、正文行长、首行后空行，可一键折行。
+- **提交选项**（齿轮按钮）：Author、Run Git hooks，以及提交前检查——Reformat code、Optimize imports、Analyze code（有错误/警告会停下，可以去看或者坚持提交）、Check TODO、Run tests（`gitLogWorkbench.commit.testCommand`）。
+- 右键：Show Diff（`Cmd/Ctrl+D`）、Jump to Source（F4）、Commit File…、Rollback…（`Cmd/Ctrl+Alt+Z`）、Move to Another Changelist…（`Alt+Shift+M`）、New Changelist…、Shelve Changes…、Add to VCS、Add to .gitignore、Delete、Show History、Copy Path；冲突文件有 Merge…、Accept Yours、Accept Theirs、Mark as Resolved。
+
+![改动块分到不同 changelist](images/n9-split-chunks.jpg)
+
+![提交信息检查](images/n2-message-checks.jpg)
+
+### 可编辑、有语言功能的 Diff
+
+- Commit 窗口里的 Diff 是 HEAD ↔ **真实文件**：右侧可编辑，跳转定义、重命名、诊断都能用。
+- Log 里打开的 Diff，只要文件在该提交里的版本和工作区一致，右侧也用真实文件。
+- **Jump to Source**（F4）：从任何只读的历史版本打开本地文件，并定位到对应行。
+- 文件、提交、分支都可以 **Compare with Local**（分支上叫 *Show Diff with Working Tree*）。
+
+![可编辑 Diff + LSP](images/c5-diff-lsp.jpg)
+
+### Log 操作
+
+- 提交：Edit Commit Message…、Fixup… / Squash Into…（在 Commit 窗口预填 `fixup!` / `squash!`）、Undo Commit、Interactively Rebase from Here…、Push All up to Here…、Create Patch…、Compare with Local。
+- 变更文件：Compare with Local、Jump to Source、Show History for File、Revert / Cherry-Pick Selected Changes、Get from Revision、Drop Selected Changes…（把这个文件的改动从该提交里去掉）、Create Patch…。
+- 分支：Checkout and Rebase onto Current、Rebase Current onto、Merge into Current、Pull into Current Using Rebase/Merge、Update（不切换分支直接快进）、Show Diff with Working Tree。
+- 工具栏：Push…、Update Project（Rebase/Merge）、Commit…。
+
+### 对话框与弹出菜单
+
+- **交互式 Rebase**：pick / reword / edit / squash / fixup / drop，`Alt+↑/↓` 调整顺序，快捷键 P/R/E/S/F/D，squash 组的提交信息合并后可编辑；本地改动自动 stash。
+- **Push**：待推送的提交及其文件，可改远程和目标分支（不存在时标 *New*），Set upstream、Push tags、Force push with lease；推送被拒时可选 Rebase and Push / Merge and Push。
+- **Branches** 弹窗（`Git Log: Branches…`）：Checkout、New Branch from…、Checkout and Rebase、Rebase、Merge、Update、Push、Rename、Delete、Pull Using Rebase/Merge。
+- `Git Log: VCS Operations…`、`Git Log: Update Project…`、`Git Log: Push…`。
+
+![交互式 Rebase 对话框](images/c18-rebase-dialog.jpg)
+
+![Push 对话框](images/c13-push-dialog.jpg)
+
+![Branches 弹窗](images/x-branch-actions.jpg)
+
+### Annotate with Git Blame
+
+编辑器（或行号区）右键 → *Git Log → Annotate with Git Blame*：每行旁边显示作者和日期，按新旧着色，未提交的行也会标出；悬停可看提交信息、Show Diff、Copy Hash。
+
+![Annotate](images/c14-annotate.jpg)
+
+## 命令
+
+| 命令 | 作用 |
+| --- | --- |
+| `Git Log: Commit…` | 打开 Commit 窗口 |
+| `Git Log: Open Log` | 打开 Git Log 标签 |
+| `Git Log: Branches…` | 分支弹窗 |
+| `Git Log: Push…` | Push 对话框 |
+| `Git Log: Update Project…` | `git pull --rebase` 或 `--no-rebase`，带 autostash |
+| `Git Log: VCS Operations…` | 以上操作的快捷菜单 |
+
+## 快捷键
+
+| 按键 | 位置 | 作用 |
+| --- | --- | --- |
+| `Cmd/Ctrl+Enter` | 提交信息框 | 提交 |
+| `Cmd/Ctrl+Alt+Enter` | 提交信息框 | Commit and Push… |
+| `Cmd/Ctrl+D` | Commit 窗口 | Show Diff |
+| `Cmd/Ctrl+Alt+Z` | Commit 窗口 | Rollback… |
+| `Alt+Shift+M` | Commit 窗口 | Move to Another Changelist… |
+| `F4` | 只读 Diff / Commit 窗口 | Jump to Source |
+| `P R E S F D`、`Alt+↑/↓` | Rebase 对话框 | 改动作、调整顺序 |
+
+可选的全局快捷键（默认不绑定，因为会和编辑器自带的冲突），需要的话加到 `keybindings.json`：
+
+```json
+[
+  { "key": "cmd+k cmd+c", "command": "gitLogWorkbench.commit.open" },
+  { "key": "cmd+shift+k", "command": "gitLogWorkbench.push", "when": "!editorTextFocus" },
+  { "key": "cmd+t", "command": "gitLogWorkbench.updateProject", "when": "!editorTextFocus" },
+  { "key": "ctrl+v", "command": "gitLogWorkbench.vcsOperations", "when": "!editorTextFocus" }
+]
+```
+
+## 设置
+
+| 设置 | 默认值 | 说明 |
+| --- | --- | --- |
+| `gitLogWorkbench.commit.testCommand` | `""` | *Run tests* 检查执行的命令，在仓库根目录运行（如 `pnpm test`） |
+| `gitLogWorkbench.commit.subjectLength` | `72` | 首行超过这个长度就提醒（0 关闭） |
+| `gitLogWorkbench.commit.bodyLineLength` | `72` | 正文某行超过这个长度就提醒（0 关闭） |
+| `gitLogWorkbench.commit.blankLineAfterSubject` | `true` | 首行后没有空行时提醒 |
+| `gitLogWorkbench.git.path` | `"git"` | Git 可执行文件 |
+| `gitLogWorkbench.currentLineBlame.enabled` | `true` | 光标所在行后显示 blame |
+
+其余 `gitLogWorkbench.*` 设置来自原版（Log 分页大小、仓库扫描深度等）。
+
+## 实现方式
+
+- 所有操作都通过 Git 命令行完成——不走 shell，不保存任何凭据，认证交给 Git（credential helper / SSH agent）。
+- 部分提交用临时索引（`GIT_INDEX_FILE`）：从 HEAD 建出来，只应用选中的块/行，用它提交，再把真实索引里这些路径同步过来。暂存区从不作为提交的输入。
+- 交互式 rebase 用生成好的 todo 列表执行 `git rebase -i`；reword 和 squash 的信息通过 `git commit --amend` 步骤写入。
+
+## 许可证
+
+[MIT](LICENSE)，与原版相同。
+
+---
+
+# Git Log（原版功能）
+
+以下是原版 Git Log 扩展的说明，这些功能全部保留。
+
+## Log 截图
 
 ### Git Log 主界面
 
@@ -154,12 +280,13 @@ code --install-extension ascenx.git-log
 ## 本地开发
 
 ```text
-npm install
-npm run typecheck
-npm run lint
-npm run test:unit
-npm run test:integration
-npm run build
+asdf install        # 按 .tool-versions 装 Node
+pnpm install
+pnpm run typecheck
+pnpm run lint
+pnpm run test:unit
+pnpm run test:integration
+pnpm run build
 ```
 
 在 VS Code 中选择 `Run Extension` 启动 Extension Development Host，然后执行命令 `Git Log: Open Log`；也可以直接点击底部 Panel 的 `Git Log` Tab。
@@ -167,7 +294,7 @@ npm run build
 生成本地 VSIX：
 
 ```text
-npm run package
+pnpm run package
 ```
 
 

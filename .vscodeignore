@@ -14,3 +14,5 @@ vitest.config.mts
 eslint.config.mjs
 pnpm-lock.yaml
 .tool-versions
+images/**
+media/icon.svg

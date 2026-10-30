@@ -1,50 +1,164 @@
 # Git Log Plus
 
-A fork of [ascenx/vscode-git-log](https://github.com/ascenx/vscode-git-log) (MIT) that turns it into a complete IDE-style Git workflow for VS Code and Cursor. Everything from the original Git Log is kept; this fork adds the pieces below.
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-## What this fork adds
+[![Open VSX Version](https://img.shields.io/open-vsx/v/daliuchen/git-log-plus?label=Open%20VSX)](https://open-vsx.org/extension/daliuchen/git-log-plus)
 
-**Commit tool window** (activity bar → Commit, or `Git Log: Commit…`)
+An IDE-style Git workflow for **Cursor** and **VS Code**: a real Commit tool window with changelists and partial commits, a commit graph Log, interactive rebase, a Push dialog, Annotate, and diffs you can actually edit with full language support.
 
-- Local changes as a directory tree (single-child folders are merged, e.g. `src/commit`) or a flat list, grouped by changelist and, with several repositories, by repository. Merge Conflicts and Unversioned Files have their own groups.
-- Checkboxes on files, folders, and changelists (tri-state). The checked files' working-tree content is committed regardless of what is staged (`git commit --only`).
-- **Partial commits**: expand a modified file to see each change chunk with its own checkbox; unchecked chunks stay as local changes.
-- Changelists: create, rename, delete, set active, move files (Alt+Shift+M). New changes land in the active changelist, which is checked by default.
-- Commit message with history, Amend (loads the last message), Sign-off, Commit and Commit and Push… (Ctrl/Cmd+Enter, add Alt for push). Drafts are kept per workspace.
-- Context menu: Show Diff (Ctrl/Cmd+D), Jump to Source (F4), Commit File…, Rollback… (Ctrl/Cmd+Alt+Z), Move to Another Changelist…, New Changelist…, Shelve Changes… (`git stash push -- <paths>`), Add to VCS, Add to .gitignore, Delete, Show History, Copy Path; for conflicts Merge…, Accept Yours, Accept Theirs, Mark as Resolved.
-- Optional diff preview on selection.
-- Line-level selection: expand a chunk to check individual lines. Chunks can be moved to another changelist (a split file shows in each), and files can be dragged onto a changelist. Changelist descriptions prefill the commit message.
-- Commit options (gear button): Author, Run Git hooks, and checks before commit — Reformat code, Optimize imports, Analyze code (stops on errors/warnings), Check TODO, Run tests (`gitLogWorkbench.commit.testCommand`).
-- `commit.template` prefills the message; the subject/body length and the blank line after the subject are checked, with one-click wrapping.
-- Rollback offers to delete the local copies of added files.
-- Editor context menu: Commit This Change… and Amend This Change into Last Commit for the change at the cursor.
+Built on [ascenx/vscode-git-log](https://github.com/ascenx/vscode-git-log) (MIT). Every feature of the original Git Log is kept; see [Git Log (original features)](#git-log-original-features).
 
-**Editable diffs with language features**
+![Commit tool window](images/c1-commit-window.jpg)
 
-- Diffs from the Commit view compare HEAD with the real file, so the right side is editable and LSP features (go to definition, rename, diagnostics) work.
-- Diffs from the Log use the real working-tree file whenever it matches the commit's version.
-- Jump to Source (F4, or the diff toolbar button) opens the local file at the corresponding line from any read-only revision.
-- Compare with Local for a file, a commit, or a branch (Show Diff with Working Tree), with the local side editable.
+## Why
 
-**Log additions**
+The built-in Source Control view is fine for `git add` + `git commit`, but it falls short once you work the way a full IDE lets you:
 
-- Commits: Edit Commit Message… (any commit; newer commits are recreated with identical trees, so the working tree is untouched), Fixup… / Squash Into… (prepares `fixup!` / `squash!` in the Commit view), Undo Commit (soft reset; the message goes back to the Commit view), Interactively Rebase from Here… (pick, reword, edit, squash, fixup, drop, reorder; local changes are auto-stashed), Push All up to Here…, Create Patch…, Compare with Local.
-- Changed files: Compare with Local, Jump to Source, Show History for File, Revert Selected Changes, Cherry-Pick Selected Changes, Get from Revision, Drop Selected Changes…, Create Patch….
-- Branches: Checkout and Rebase onto Current, Pull into Current Using Rebase/Merge, Update (fast-forward without checkout), Show Diff with Working Tree.
-- Toolbar: Push… (dialog), Update Project (Rebase/Merge), Commit….
+- Commit **part of a file** — single chunks or single lines — without touching the staging area.
+- Keep unrelated work apart in **changelists** and commit them separately.
+- Review changes in a diff whose right side is **the real file**, so go to definition, rename and diagnostics keep working.
+- Rebase, reword, squash, undo and push from menus and dialogs instead of the terminal.
 
-**Dialogs and popups**
+## Installation
 
-- Push dialog: a rejected push offers Rebase and Push or Merge and Push. Outgoing commits and their files, editable remote and target branch (marked New when it does not exist), Set upstream, Push tags, Force push with lease.
-- Interactive rebase dialog with keyboard shortcuts (P/R/E/S/F/D, Alt+↑/↓) and a combined message editor for squash groups.
-- `Git Log: Branches…` popup: pick a branch, then Checkout, New Branch from…, Checkout and Rebase, Rebase/Merge, Update, Push, Rename, Delete, Pull Using Rebase/Merge.
-- `Git Log: VCS Operations…` quick menu, `Git Log: Update Project…`, `Git Log: Push…`.
+**From the marketplace (Cursor / VS Code / VSCodium)**: open the Extensions view, search for **Git Log Plus**, and install `daliuchen.git-log-plus`.
 
-**Annotate with Git Blame**
+**From a `.vsix` file**: download it from [GitHub Releases](https://github.com/daliuchen/git-log-plus/releases) (or build it, see [Local development](#local-development)), then run *Extensions: Install from VSIX…*, or:
 
-- Editor context menu → Git Log → Annotate with Git Blame (also on the line-number context menu): author and date beside every line, shaded by age, including uncommitted lines. Hover for the commit message, Show Diff, and Copy Hash.
+```bash
+cursor --install-extension git-log-plus-0.3.0.vsix   # or: code --install-extension …
+```
 
-Suggested keybindings (not bound by default because they collide with editor defaults):
+> If the original **Git Log** (`ascenx.git-log`) is installed, uninstall it first — both extensions register the same views and commands.
+
+Requires VS Code 1.85+ (any current Cursor) and Git 2.27+. After installing, run *Developer: Reload Window*.
+
+## Quick start
+
+### 1. Open the Commit window
+
+- **VS Code**: click the **Commit** icon in the activity bar.
+- **Cursor**: the activity bar is horizontal at the top of the side bar. If the Commit icon is not visible, click the **⌄** at the end of the icon row and pick **Commit**.
+- Anywhere: Command Palette → `Git Log: Commit…`.
+
+Tip: drag the Commit view to the secondary side bar to keep it open next to the editor.
+
+### 2. Commit
+
+1. Check the files (or folders, or a whole changelist) you want to commit. New changes are checked by default.
+2. Double-click a file (or press `Cmd/Ctrl+D`) to review its diff. The right side is the real file — fix things right there.
+3. Type a message and press `Cmd/Ctrl+Enter` to commit, or `Cmd/Ctrl+Alt+Enter` for **Commit and Push…**.
+
+What gets committed is the **working-tree content of the checked items**, regardless of what is staged (`git commit --only`).
+
+### 3. Commit only part of a file
+
+Expand a modified file: each change chunk gets its own checkbox. Expand a chunk to check individual lines. Unchecked chunks and lines stay as local changes.
+
+![Partial commit by line](images/n3-lines-and-options.jpg)
+
+### 4. Browse history
+
+Open the **Git Log** tab in the bottom panel (`Git Log: Open Log`). Right-click commits, files and branches for every operation — see [Common tasks](#common-tasks).
+
+![Log context menu](images/c15-log-menu.jpg)
+
+## Common tasks
+
+| I want to… | How |
+| --- | --- |
+| Commit a few files | Check them in the Commit window → message → `Cmd/Ctrl+Enter` |
+| Commit some chunks / lines of a file | Expand the file (and the chunk) in the Commit window, check only what you want |
+| Keep two pieces of work apart | Toolbar **New Changelist…**, then drag files (or right-click a chunk → *Move to Another Changelist…*) onto it. Commit each changelist on its own |
+| Fix the last commit | Check **Amend** (the last message is loaded) → commit. Or in the editor: right-click → *Git Log → Amend This Change into Last Commit* |
+| Commit just the change under the cursor | Editor right-click → *Git Log → Commit This Change…* |
+| Undo the last commit but keep the changes | Log → right-click the commit → **Undo Commit** (the message goes back to the Commit window) |
+| Change an old commit's message | Log → right-click the commit → **Edit Commit Message…** (the working tree is not touched) |
+| Squash / reorder / drop commits | Log → right-click the oldest commit to change → **Interactively Rebase from Here…** |
+| Rebase my branch onto `master` | Fetch first, then `Git Log: Branches…` → pick `origin/master` → **Rebase '‹current›' onto 'origin/master'**. Or Log → right-click `origin/master` → **Rebase Current onto**. Or pick `origin/master` → **Pull into '‹current›' Using Rebase** to fetch + rebase in one go |
+| Resolve rebase / merge conflicts | Conflicts show in their own group in the Commit window: *Merge…*, *Accept Yours*, *Accept Theirs*, *Mark as Resolved*. Then **Continue** in the rebase bar at the top of the Log |
+| Push | `Git Log: Push…` or **Commit and Push…**. If the push is rejected, choose **Rebase and Push** or **Merge and Push**. After a rebase, tick *Force push (with lease)* |
+| Put work aside | Right-click files → **Shelve Changes…** (only the selected files are stashed) |
+| Throw away local changes | Right-click → **Rollback…** (`Cmd/Ctrl+Alt+Z`); for new files you can also delete the local copy |
+| Take a file from another commit / branch | Log → select the commit → right-click the file → **Get from Revision** / **Cherry-Pick Selected Changes** / **Revert Selected Changes** |
+| Jump from a read-only old version to the real file | Press **F4** (or the toolbar button in the diff) |
+| See who changed each line | Editor right-click → *Git Log → Annotate with Git Blame* |
+| Switch / create / delete branches | `Git Log: Branches…` |
+
+## Features
+
+### Commit tool window
+
+- Changes as a **directory tree** (single-child folders merged, e.g. `src/commit`) or a flat list; grouped by changelist and, with several repositories, by repository. Merge conflicts and unversioned files have their own groups.
+- **Tri-state checkboxes** on changelists, folders, files, chunks and lines.
+- **Changelists**: create, rename, delete, set active, add a description (it prefills the commit message), move files or individual chunks between them (a split file shows in each), drag & drop. New changes land in the active changelist.
+- Commit message with **history**, **Amend**, **Sign-off**, drafts kept per workspace, `commit.template` support, and message checks (subject length, body line length, blank line after the subject) with one-click wrapping.
+- **Commit options** (gear button): Author, Run Git hooks, and checks before commit — Reformat code, Optimize imports, Analyze code (stops on errors/warnings so you can review or commit anyway), Check TODO, Run tests (`gitLogWorkbench.commit.testCommand`).
+- Context menu: Show Diff (`Cmd/Ctrl+D`), Jump to Source (F4), Commit File…, Rollback… (`Cmd/Ctrl+Alt+Z`), Move to Another Changelist… (`Alt+Shift+M`), New Changelist…, Shelve Changes…, Add to VCS, Add to .gitignore, Delete, Show History, Copy Path; for conflicts Merge…, Accept Yours, Accept Theirs, Mark as Resolved.
+
+![Chunks split across changelists](images/n9-split-chunks.jpg)
+
+![Commit message checks](images/n2-message-checks.jpg)
+
+### Editable diffs with language features
+
+- Diffs from the Commit window compare HEAD with the **real file**: the right side is editable, and go to definition, rename and diagnostics work.
+- Diffs from the Log use the real file whenever it matches the commit's version.
+- **Jump to Source** (F4) opens the local file at the matching line from any read-only revision.
+- **Compare with Local** for a file, a commit or a branch (*Show Diff with Working Tree*).
+
+![Editable diff with LSP](images/c5-diff-lsp.jpg)
+
+### Log operations
+
+- Commits: Edit Commit Message…, Fixup… / Squash Into… (prepares `fixup!` / `squash!` in the Commit window), Undo Commit, Interactively Rebase from Here…, Push All up to Here…, Create Patch…, Compare with Local.
+- Changed files: Compare with Local, Jump to Source, Show History for File, Revert / Cherry-Pick Selected Changes, Get from Revision, Drop Selected Changes… (removes the file's changes from that commit), Create Patch….
+- Branches: Checkout and Rebase onto Current, Rebase Current onto, Merge into Current, Pull into Current Using Rebase/Merge, Update (fast-forward without checkout), Show Diff with Working Tree.
+- Toolbar: Push…, Update Project (Rebase/Merge), Commit….
+
+### Dialogs and popups
+
+- **Interactive rebase**: pick / reword / edit / squash / fixup / drop, reorder with `Alt+↑/↓`, keys P/R/E/S/F/D, combined message editor for squash groups. Local changes are auto-stashed.
+- **Push**: outgoing commits and their files, editable remote and target branch (*New* when it does not exist yet), Set upstream, Push tags, Force push with lease. A rejected push offers Rebase and Push / Merge and Push.
+- **Branches** popup (`Git Log: Branches…`): Checkout, New Branch from…, Checkout and Rebase, Rebase, Merge, Update, Push, Rename, Delete, Pull Using Rebase/Merge.
+- `Git Log: VCS Operations…`, `Git Log: Update Project…`, `Git Log: Push…`.
+
+![Interactive rebase dialog](images/c18-rebase-dialog.jpg)
+
+![Push dialog](images/c13-push-dialog.jpg)
+
+![Branches popup](images/x-branch-actions.jpg)
+
+### Annotate with Git Blame
+
+Editor (or line-number) right-click → *Git Log → Annotate with Git Blame*: author and date beside every line, shaded by age, uncommitted lines included. Hover for the commit message, Show Diff and Copy Hash.
+
+![Annotate](images/c14-annotate.jpg)
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `Git Log: Commit…` | Open the Commit window |
+| `Git Log: Open Log` | Open the Git Log tab |
+| `Git Log: Branches…` | Branch popup |
+| `Git Log: Push…` | Push dialog |
+| `Git Log: Update Project…` | `git pull --rebase` or `--no-rebase`, with autostash |
+| `Git Log: VCS Operations…` | Quick menu of the above |
+
+## Keyboard shortcuts
+
+| Key | Where | Action |
+| --- | --- | --- |
+| `Cmd/Ctrl+Enter` | Commit message | Commit |
+| `Cmd/Ctrl+Alt+Enter` | Commit message | Commit and Push… |
+| `Cmd/Ctrl+D` | Commit window | Show Diff |
+| `Cmd/Ctrl+Alt+Z` | Commit window | Rollback… |
+| `Alt+Shift+M` | Commit window | Move to Another Changelist… |
+| `F4` | Read-only diff / Commit window | Jump to Source |
+| `P R E S F D`, `Alt+↑/↓` | Rebase dialog | Change action, reorder |
+
+Optional global shortcuts (not bound by default because they collide with editor defaults) — add them to `keybindings.json` if you like:
 
 ```json
 [
@@ -55,34 +169,36 @@ Suggested keybindings (not bound by default because they collide with editor def
 ]
 ```
 
-Install a local build with `pnpm install && pnpm run package`, then `cursor --install-extension git-log-plus-<version>.vsix`. Uninstall the original `ascenx.git-log` first: both extensions contribute the same views and commands.
+## Settings
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `gitLogWorkbench.commit.testCommand` | `""` | Command for the *Run tests* check, run in the repository root (e.g. `pnpm test`) |
+| `gitLogWorkbench.commit.subjectLength` | `72` | Warn when the subject is longer (0 = off) |
+| `gitLogWorkbench.commit.bodyLineLength` | `72` | Warn when a body line is longer (0 = off) |
+| `gitLogWorkbench.commit.blankLineAfterSubject` | `true` | Warn when the subject is not followed by a blank line |
+| `gitLogWorkbench.git.path` | `"git"` | Git executable |
+| `gitLogWorkbench.currentLineBlame.enabled` | `true` | Current-line blame after the cursor line |
+
+The remaining `gitLogWorkbench.*` settings come from the original extension (log page size, repository scan depth, etc.).
+
+## How it works
+
+- Everything runs through the Git CLI — no shell, no stored credentials; authentication is left to Git (credential helper / SSH agent).
+- Partial commits use a temporary index (`GIT_INDEX_FILE`): it is built from HEAD, only the selected chunks/lines are applied, the commit is made from it, and your real index is then synced for the committed paths. Your staging area is never used as input.
+- Interactive rebase runs `git rebase -i` with a generated todo list; reworded and squashed messages are applied with `git commit --amend` steps.
+
+## License
+
+[MIT](LICENSE), same as the original extension.
 
 ---
 
 # Git Log (original features)
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+The sections below describe the original Git Log extension, all of which is included.
 
-[![Visual Studio Marketplace Version](https://vsmarketplacebadges.dev/version-short/ascenx.git-log.svg?label=Marketplace&color=007ACC)](https://marketplace.visualstudio.com/items?itemName=ascenx.git-log)
-[![Open VSX Version](https://img.shields.io/open-vsx/v/ascenx/git-log?label=Open%20VSX)](https://open-vsx.org/extension/ascenx/git-log)
-
-A visual Git log, commit graph, history browser, and repository operations extension for Visual Studio Code.
-
-Git Log is designed to provide a complete Git history workflow inside VS Code rather than restyling the built-in Source Control view. It combines a refs tree, commit topology graph, changed-files tree, commit details, native diffs, and common branch and commit operations.
-
-## Installation
-
-Install [Git Log — Commit Graph & History](https://marketplace.visualstudio.com/items?itemName=ascenx.git-log) from the Visual Studio Marketplace, or search for `ascenx.git-log` in the VS Code Extensions view.
-
-Git Log supports VS Code 1.85.2 and later with Git 2.27 or newer.
-
-You can also install it from the command line:
-
-```bash
-code --install-extension ascenx.git-log
-```
-
-## Screenshots
+## Log screenshots
 
 ### Git Log Workbench
 
@@ -164,12 +280,13 @@ The current version covers Milestones 0–6 and the editor history work from Mil
 ## Local development
 
 ```text
-npm install
-npm run typecheck
-npm run lint
-npm run test:unit
-npm run test:integration
-npm run build
+asdf install        # Node version from .tool-versions
+pnpm install
+pnpm run typecheck
+pnpm run lint
+pnpm run test:unit
+pnpm run test:integration
+pnpm run build
 ```
 
 In VS Code, select `Run Extension` to launch the Extension Development Host, then run `Git Log: Open Log` or click the `Git Log` tab in the bottom Panel.
@@ -177,7 +294,7 @@ In VS Code, select `Run Extension` to launch the Extension Development Host, the
 Build a local VSIX with:
 
 ```text
-npm run package
+pnpm run package
 ```
 
 
