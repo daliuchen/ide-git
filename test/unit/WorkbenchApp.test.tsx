@@ -3356,31 +3356,25 @@ describe('WorkbenchApp', () => {
     vi.useRealTimers();
   });
 
-  it('positions commit filter popovers from the visible commit pane bounds', () => {
+  it('opens a filter popover under its button and keeps it inside the viewport', () => {
     const innerWidth = vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1000);
+    const originalRect = HTMLElement.prototype.getBoundingClientRect;
+    const rect = (left: number): DOMRect =>
+      ({ x: left, y: 100, top: 100, right: left + 60, bottom: 127, left, width: 60, height: 27, toJSON: () => ({}) }) as DOMRect;
     try {
       render(<App />);
-      const commitLog = screen.getByRole('grid', { name: 'Commit log' });
-      commitLog.getBoundingClientRect = () =>
-        ({
-          x: 220,
-          y: 100,
-          top: 100,
-          right: 564,
-          bottom: 600,
-          left: 220,
-          width: 344,
-          height: 500,
-          toJSON: () => ({}),
-        }) as DOMRect;
+      const paths = screen.getByRole('button', { name: 'Paths' });
+      paths.getBoundingClientRect = () => rect(300);
+      fireEvent.click(paths);
+      expect(screen.getByRole('dialog', { name: 'paths filter' })).toHaveStyle({ top: '131px', left: '300px' });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Paths' }));
-
-      expect(screen.getByRole('dialog', { name: 'paths filter' })).toHaveStyle({
-        top: '138px',
-        right: '444px',
-      });
+      fireEvent.click(paths);
+      paths.getBoundingClientRect = () => rect(900);
+      fireEvent.click(paths);
+      // 1000 - 360 - 8: shifted left so the popover does not run off the right edge.
+      expect(screen.getByRole('dialog', { name: 'paths filter' })).toHaveStyle({ left: '632px' });
     } finally {
+      HTMLElement.prototype.getBoundingClientRect = originalRect;
       innerWidth.mockRestore();
     }
   });

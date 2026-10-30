@@ -452,9 +452,7 @@ export function App() {
   );
   const [filterPopup, setFilterPopup] = useState<'branch' | 'user' | 'date' | 'paths' | undefined>();
   const [filterSearch, setFilterSearch] = useState('');
-  const [filterPopoverPosition, setFilterPopoverPosition] = useState<
-    { top: number; right: number } | undefined
-  >();
+  const [filterPopoverPosition, setFilterPopoverPosition] = useState<CSSProperties | undefined>();
   const [contextMenu, setContextMenu] = useState<
     | {
         kind: 'commit';
@@ -730,12 +728,17 @@ export function App() {
   useEffect(() => {
     if (!filterPopup) return;
     const updatePosition = (): void => {
-      const bounds = logRef.current?.getBoundingClientRect();
+      // Open under the filter button that was clicked, kept inside the viewport.
+      const anchor = document
+        .querySelector('.filter-chip > button[aria-expanded="true"]')
+        ?.getBoundingClientRect();
       const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-      if (!bounds || bounds.width <= 0 || bounds.height <= 0 || viewportWidth <= 0) return;
+      if (!anchor || anchor.width <= 0 || viewportWidth <= 0) return;
+      const width = Math.min(360, viewportWidth - 24);
       setFilterPopoverPosition({
-        top: Math.max(0, bounds.top + 38),
-        right: Math.max(8, viewportWidth - Math.min(bounds.right, viewportWidth) + 8),
+        top: Math.max(0, anchor.bottom + 4),
+        left: Math.max(8, Math.min(anchor.left, viewportWidth - width - 8)),
+        right: 'auto',
       });
     };
     updatePosition();
