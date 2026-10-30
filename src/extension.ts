@@ -508,21 +508,6 @@ export function activate(context: vscode.ExtensionContext): void {
       await runWorkbenchCommand(commandHost, repository, { kind: 'compareWithLocal', hash: revision });
     },
   );
-  const vcsOperationsCommand = vscode.commands.registerCommand('gitLogWorkbench.vcsOperations', async () => {
-    const operations: (vscode.QuickPickItem & { command: string })[] = [
-      { label: '$(check) Commit…', command: 'gitLogWorkbench.commit.open' },
-      { label: '$(repo-push) Push…', command: 'gitLogWorkbench.push' },
-      { label: '$(repo-pull) Update Project…', command: 'gitLogWorkbench.updateProject' },
-      { label: '$(git-branch) Branches…', command: 'gitLogWorkbench.branches' },
-      { label: '$(git-commit) Show Git Log', command: 'gitLogWorkbench.openLog' },
-      { label: '$(person) Annotate with Git Blame', command: 'gitLogWorkbench.editor.toggleAnnotate' },
-      { label: '$(history) Show File History', command: 'gitLogWorkbench.editor.showFileHistory' },
-      { label: '$(history) Show History for Selection', command: 'gitLogWorkbench.editor.showSelectionHistory' },
-      { label: '$(diff) Compare File with Branch or Tag…', command: 'gitLogWorkbench.editor.compareFileWithRef' },
-    ];
-    const picked = await vscode.window.showQuickPick(operations, { placeHolder: 'VCS Operations' });
-    if (picked) await vscode.commands.executeCommand(picked.command);
-  });
   const commitViewRegistration = vscode.window.registerWebviewViewProvider(
     'gitLogWorkbench.commit',
     commitViewProvider,
@@ -617,7 +602,6 @@ export function activate(context: vscode.ExtensionContext): void {
     dialogs,
     branchesCommand,
     compareWithLocalCommand,
-    vcsOperationsCommand,
     pushCommand,
     updateProjectCommand,
     vscode.commands.registerCommand('gitLogWorkbench.diff.jumpToSource', (resource?: unknown) =>

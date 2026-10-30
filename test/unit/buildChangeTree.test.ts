@@ -19,55 +19,41 @@ import {
 
 const repositories: CommitViewRepository[] = [{ id: 'r', name: 'repo', root: '/repo', truncated: false }];
 
-function change(path: string, status: CommitViewChange['status'] = 'M', changelistId = 'default'): CommitViewChange {
-  return {
-    path,
-    status,
-    staged: false,
-    unstaged: true,
-    repositoryId: 'r',
-    ...(status === '?' || status === 'U' ? {} : { changelistId }),
-  };
+function change(path: string, status: CommitViewChange['status'] = 'M'): CommitViewChange {
+  return { path, status, staged: false, unstaged: true, repositoryId: 'r' };
 }
 
-const changelists = [
-  { id: 'default', name: 'Changes' },
-  { id: 'later', name: 'Later' },
-];
-
 describe('buildChangeTree', () => {
-  it('groups by changelist and compacts single-child directory chains', () => {
+  it('groups conflicts, changes, and unversioned files and compacts single-child directory chains', () => {
     const tree = buildChangeTree({
       changes: [
         change('src/commit/a.ts'),
         change('src/commit/b.ts'),
         change('src/webview/c.ts'),
         change('README.md'),
-        change('docs/guide/intro.md', 'M', 'later'),
+        change('docs/guide/intro.md'),
         change('scratch.txt', '?'),
         change('conflict.ts', 'U'),
       ],
       repositories,
-      changelists,
-      activeChangelistId: 'later',
       groupByDirectory: true,
       showUnversioned: true,
     });
-    expect(tree.map((node) => node.label)).toEqual(['Merge Conflicts', 'Later', 'Changes', 'Unversioned Files']);
-    const later = tree[1];
-    expect(later?.children.map((node) => node.label)).toEqual(['docs/guide']);
-    const changes = tree[2];
-    expect(changes?.children.map((node) => `${node.kind}:${node.label}`)).toEqual(['directory:src', 'file:README.md']);
-    expect(changes?.children[0]?.children.map((node) => node.label)).toEqual(['commit', 'webview']);
-    expect(changes?.children[0]?.changes).toHaveLength(3);
+    expect(tree.map((node) => node.label)).toEqual(['Merge Conflicts', 'Changes', 'Unversioned Files']);
+    const changes = tree[1];
+    expect(changes?.children.map((node) => `${node.kind}:${node.label}`)).toEqual([
+      'directory:docs/guide',
+      'directory:src',
+      'file:README.md',
+    ]);
+    expect(changes?.children[1]?.children.map((node) => node.label)).toEqual(['commit', 'webview']);
+    expect(changes?.children[1]?.changes).toHaveLength(3);
   });
 
   it('lists files flat with their directory as detail', () => {
     const tree = buildChangeTree({
       changes: [change('src/b.ts'), change('a.ts')],
       repositories,
-      changelists,
-      activeChangelistId: 'default',
       groupByDirectory: false,
       showUnversioned: false,
     });
@@ -81,8 +67,6 @@ describe('buildChangeTree', () => {
     const tree = buildChangeTree({
       changes: [change('a.ts'), { ...change('b.ts'), repositoryId: 's' }],
       repositories: [...repositories, { id: 's', name: 'second', root: '/second', branch: 'dev', truncated: false }],
-      changelists: changelists.slice(0, 1),
-      activeChangelistId: 'default',
       groupByDirectory: true,
       showUnversioned: true,
     });
@@ -96,8 +80,6 @@ describe('buildChangeTree', () => {
     const tree = buildChangeTree({
       changes: [change('src/a.ts')],
       repositories,
-      changelists: changelists.slice(0, 1),
-      activeChangelistId: 'default',
       groupByDirectory: true,
       showUnversioned: true,
     });
@@ -123,27 +105,27 @@ describe('selection model', () => {
   const a = hunk('a'.repeat(16), ['-old a', '+new a']);
   const b = hunk('b'.repeat(16), ['+b1', '+b2', '+b3']);
 
-  it('includes the active changelist by default and honours explicit file choices', () => {
-    const context: SelectionContext = { activeChangelistId: 'default', hunks: new Map() };
-    const active = change('a.ts');
-    const other = change('b.ts', 'M', 'later');
+  it('includes tracked changes by default and honours explicit file choices', () => {
+    const context: SelectionContext = { hunks: new Map() };
+    const tracked = change('a.ts');
     const unversioned = change('c.ts', '?');
-    expect([active, other, unversioned].map((item) => fileIncluded(item, EMPTY_SELECTION, context))).toEqual([true, false, false]);
-    const toggled = setFilesIncluded([active, unversioned], undefined, false, EMPTY_SELECTION, context);
-    expect(nodeState([active, unversioned], undefined, toggled, context)).toBe('unchecked');
-    const mixed = setFilesIncluded([unversioned], undefined, true, toggled, context);
-    expect(nodeState([active, unversioned], undefined, mixed, context)).toBe('mixed');
+    const conflict = change('d.ts', 'U');
+    expect([tracked, unversioned, conflict].map((item) => fileIncluded(item, EMPTY_SELECTION))).toEqual([true, false, false]);
+    const toggled = setFilesIncluded([tracked, unversioned], false, EMPTY_SELECTION);
+    expect(nodeState([tracked, unversioned], toggled, context)).toBe('unchecked');
+    const mixed = setFilesIncluded([unversioned], true, toggled);
+    expect(nodeState([tracked, unversioned], mixed, context)).toBe('mixed');
   });
 
   it('selects chunks and individual lines', () => {
     const file = change('a.ts');
-    const context: SelectionContext = { activeChangelistId: 'default', hunks: new Map([[`r\0a.ts`, [a, b]]]) };
+    const context: SelectionContext = { hunks: new Map([[`r\0a.ts`, [a, b]]]) };
     expect(commitSelection(file, EMPTY_SELECTION, context)).toEqual({});
     let state = toggleHunk(file, a, EMPTY_SELECTION, context);
-    expect(fileState(file, undefined, state, context)).toBe('mixed');
+    expect(fileState(file, state, context)).toBe('mixed');
     expect(commitSelection(file, state, context)).toEqual({ hunks: [b.id] });
     state = toggleLine(file, b, 1, state, context);
-    expect(hunkState(file, b, state, context)).toBe('mixed');
+    expect(hunkState(file, b, state)).toBe('mixed');
     expect(commitSelection(file, state, context)).toEqual({ hunks: [b.id], lines: { [b.id]: [0, 2] } });
     expect(commitStats(file, state, context)).toEqual({ additions: 2, deletions: 0 });
     // Unchecking the remaining lines unchecks the chunk, and then nothing is committed.
@@ -152,29 +134,20 @@ describe('selection model', () => {
   });
 
   it('checking one line of an unchecked file selects only that line', () => {
-    const file = change('b.ts', 'M', 'later');
-    const context: SelectionContext = { activeChangelistId: 'default', hunks: new Map([[`r\0b.ts`, [a, b]]]) };
-    const state = toggleLine(file, b, 2, EMPTY_SELECTION, context);
+    const file = change('b.ts');
+    const context: SelectionContext = { hunks: new Map([[`r\0b.ts`, [a, b]]]) };
+    const unchecked = setFilesIncluded([file], false, EMPTY_SELECTION);
+    const state = toggleLine(file, b, 2, unchecked, context);
     expect(commitSelection(file, state, context)).toEqual({ hunks: [b.id], lines: { [b.id]: [2] } });
-  });
-
-  it('starts only the active changelist’s chunks of a split file and toggles per group', () => {
-    const file = { ...change('split.ts'), hunkChangelists: { [b.id]: 'later' } };
-    const context: SelectionContext = { activeChangelistId: 'default', hunks: new Map([[`r\0split.ts`, [a, b]]]) };
-    expect(commitSelection(file, EMPTY_SELECTION, context)).toEqual({ hunks: [a.id] });
-    expect(fileState(file, 'default', EMPTY_SELECTION, context)).toBe('checked');
-    expect(fileState(file, 'later', EMPTY_SELECTION, context)).toBe('unchecked');
-    const state = setFilesIncluded([file], 'later', true, EMPTY_SELECTION, context);
-    expect(commitSelection(file, state, context)).toEqual({});
   });
 
   it('keeps new chunks of a partially selected file unchecked after a reload', () => {
     const file = change('a.ts');
-    const context: SelectionContext = { activeChangelistId: 'default', hunks: new Map([[`r\0a.ts`, [a, b]]]) };
+    const context: SelectionContext = { hunks: new Map([[`r\0a.ts`, [a, b]]]) };
     const state = toggleHunk(file, a, EMPTY_SELECTION, context);
     const c = hunk('c'.repeat(16), ['+c']);
     const reloaded = onHunksReloaded(file, [a, b], [b, c], state);
-    const nextContext: SelectionContext = { ...context, hunks: new Map([[`r\0a.ts`, [b, c]]]) };
+    const nextContext: SelectionContext = { hunks: new Map([[`r\0a.ts`, [b, c]]]) };
     expect(commitSelection(file, reloaded, nextContext)).toEqual({ hunks: [b.id] });
   });
 });

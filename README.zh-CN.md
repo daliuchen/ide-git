@@ -4,7 +4,7 @@
 
 [![Open VSX Version](https://img.shields.io/open-vsx/v/daliuchen/git-log-plus?label=Open%20VSX)](https://open-vsx.org/extension/daliuchen/git-log-plus)
 
-给 **Cursor** 和 **VS Code** 用的 IDE 级 Git 工作流：真正的 Commit 工具窗口（changelist、按块/按行提交）、提交图谱 Log、交互式 rebase、Push 对话框、Annotate，以及右侧可编辑、语言功能完整的 Diff。
+给 **Cursor** 和 **VS Code** 用的 IDE 级 Git 工作流：真正的 Commit 工具窗口（按块/按行提交）、提交图谱 Log、交互式 rebase、Push 对话框、Annotate，以及右侧可编辑、语言功能完整的 Diff。
 
 基于 [ascenx/vscode-git-log](https://github.com/ascenx/vscode-git-log)（MIT）改造，原版 Git Log 的功能全部保留，见 [Git Log（原版功能）](#git-log原版功能)。
 
@@ -15,7 +15,6 @@
 编辑器自带的「源代码管理」做 `git add` + `git commit` 够用，但下面这些就做不到或很别扭：
 
 - 只提交文件的**一部分**（某几个改动块、某几行），而且不碰暂存区。
-- 用 **changelist** 把不相关的改动分开，各自提交。
 - 看 Diff 时右侧就是**真实文件**，跳转定义、重命名、诊断照常能用；从 Diff 打开的不再是只读文件。
 - rebase、改提交信息、squash、撤销提交、推送，都在菜单和对话框里完成，不用切终端。
 
@@ -45,7 +44,7 @@ cursor --install-extension git-log-plus-0.3.0.vsix   # VS Code 用 code --instal
 
 ### 2. 提交
 
-1. 勾选要提交的文件（或目录、整个 changelist）。新改动默认是勾上的。
+1. 勾选要提交的文件（或目录）。新改动默认是勾上的。
 2. 双击文件（或 `Cmd/Ctrl+D`）看 Diff。右侧就是真实文件，发现问题直接改。
 3. 写提交信息，`Cmd/Ctrl+Enter` 提交；`Cmd/Ctrl+Alt+Enter` 是 **Commit and Push…**。
 
@@ -69,7 +68,6 @@ cursor --install-extension git-log-plus-0.3.0.vsix   # VS Code 用 code --instal
 | --- | --- |
 | 提交几个文件 | Commit 窗口里勾上 → 写信息 → `Cmd/Ctrl+Enter` |
 | 只提交文件里的某几块 / 某几行 | Commit 窗口里展开文件（再展开改动块），只勾要的 |
-| 把两件事的改动分开 | 工具栏 **New Changelist…**，把文件拖过去（或改动块右键 → *Move to Another Changelist…*），各个 changelist 分别提交 |
 | 修改上一个提交 | 勾 **Amend**（自动带出上次的信息）再提交；或编辑器右键 → *Git Log → Amend This Change into Last Commit* |
 | 只提交光标处的这处改动 | 编辑器右键 → *Git Log → Commit This Change…* |
 | 撤销上一个提交、保留改动 | Log 里右键该提交 → **Undo Commit**（提交信息回到 Commit 窗口） |
@@ -91,16 +89,12 @@ cursor --install-extension git-log-plus-0.3.0.vsix   # VS Code 用 code --instal
 
 ### Commit 工具窗口
 
-- 改动按**目录树**展示（单子目录链合并，如 `src/commit`），可切换平铺；按 changelist 分组，多仓库时再按仓库分组；冲突文件、未跟踪文件各自成组。
-- changelist、目录、文件、改动块、行都有**三态勾选框**。
-- **Changelist**：新建、重命名、删除、设为活动、写描述（会预填提交信息）、在 changelist 之间移动文件或单个改动块（拆开的文件会同时出现在两边）、拖拽。新改动进入活动 changelist。
-- 提交信息带**历史**、**Amend**、**Sign-off**，草稿按工作区保存；支持 `commit.template`；检查首行长度、正文行长、首行后空行，可一键折行。
-- **提交选项**（齿轮按钮）：Author、Run Git hooks，以及提交前检查——Reformat code、Optimize imports、Analyze code（有错误/警告会停下，可以去看或者坚持提交）、Check TODO、Run tests（`gitLogWorkbench.commit.testCommand`）。
-- 右键：Show Diff（`Cmd/Ctrl+D`）、Jump to Source（F4）、Commit File…、Rollback…（`Cmd/Ctrl+Alt+Z`）、Move to Another Changelist…（`Alt+Shift+M`）、New Changelist…、Shelve Changes…、Add to VCS、Add to .gitignore、Delete、Show History、Copy Path；冲突文件有 Merge…、Accept Yours、Accept Theirs、Mark as Resolved。
+- 改动按**目录树**展示（单子目录链合并，如 `src/commit`），可切换平铺；多仓库时按仓库分组；冲突文件、未跟踪文件各自成组。
+- 分组、目录、文件、改动块、行都有**三态勾选框**。
+- 提交信息带**历史**、**Amend**、**Sign-off**，草稿按工作区保存。
+- **提交选项**（齿轮按钮）：Author 和 Run Git hooks（取消勾选即 `--no-verify` 提交）。
+- 右键：Show Diff（`Cmd/Ctrl+D`）、Jump to Source（F4）、Commit File…、Rollback…（`Cmd/Ctrl+Alt+Z`）、Shelve Changes…、Add to VCS、Add to .gitignore、Delete、Show History、Copy Path；冲突文件有 Merge…、Accept Yours、Accept Theirs、Mark as Resolved。
 
-![改动块分到不同 changelist](images/n9-split-chunks.jpg)
-
-![提交信息检查](images/n2-message-checks.jpg)
 
 ### 可编辑、有语言功能的 Diff
 
@@ -123,7 +117,7 @@ cursor --install-extension git-log-plus-0.3.0.vsix   # VS Code 用 code --instal
 - **交互式 Rebase**：pick / reword / edit / squash / fixup / drop，`Alt+↑/↓` 调整顺序，快捷键 P/R/E/S/F/D，squash 组的提交信息合并后可编辑；本地改动自动 stash。
 - **Push**：待推送的提交及其文件，可改远程和目标分支（不存在时标 *New*），Set upstream、Push tags、Force push with lease；推送被拒时可选 Rebase and Push / Merge and Push。
 - **Branches** 弹窗（`Git Log: Branches…`）：Checkout、New Branch from…、Checkout and Rebase、Rebase、Merge、Update、Push、Rename、Delete、Pull Using Rebase/Merge。
-- `Git Log: VCS Operations…`、`Git Log: Update Project…`、`Git Log: Push…`。
+- `Git Log: Update Project…`、`Git Log: Push…`。
 
 ![交互式 Rebase 对话框](images/c18-rebase-dialog.jpg)
 
@@ -146,7 +140,6 @@ cursor --install-extension git-log-plus-0.3.0.vsix   # VS Code 用 code --instal
 | `Git Log: Branches…` | 分支弹窗 |
 | `Git Log: Push…` | Push 对话框 |
 | `Git Log: Update Project…` | `git pull --rebase` 或 `--no-rebase`，带 autostash |
-| `Git Log: VCS Operations…` | 以上操作的快捷菜单 |
 
 ## 快捷键
 
@@ -156,7 +149,6 @@ cursor --install-extension git-log-plus-0.3.0.vsix   # VS Code 用 code --instal
 | `Cmd/Ctrl+Alt+Enter` | 提交信息框 | Commit and Push… |
 | `Cmd/Ctrl+D` | Commit 窗口 | Show Diff |
 | `Cmd/Ctrl+Alt+Z` | Commit 窗口 | Rollback… |
-| `Alt+Shift+M` | Commit 窗口 | Move to Another Changelist… |
 | `F4` | 只读 Diff / Commit 窗口 | Jump to Source |
 | `P R E S F D`、`Alt+↑/↓` | Rebase 对话框 | 改动作、调整顺序 |
 
@@ -166,8 +158,7 @@ cursor --install-extension git-log-plus-0.3.0.vsix   # VS Code 用 code --instal
 [
   { "key": "cmd+k cmd+c", "command": "gitLogWorkbench.commit.open" },
   { "key": "cmd+shift+k", "command": "gitLogWorkbench.push", "when": "!editorTextFocus" },
-  { "key": "cmd+t", "command": "gitLogWorkbench.updateProject", "when": "!editorTextFocus" },
-  { "key": "ctrl+v", "command": "gitLogWorkbench.vcsOperations", "when": "!editorTextFocus" }
+  { "key": "cmd+t", "command": "gitLogWorkbench.updateProject", "when": "!editorTextFocus" }
 ]
 ```
 
@@ -175,10 +166,6 @@ cursor --install-extension git-log-plus-0.3.0.vsix   # VS Code 用 code --instal
 
 | 设置 | 默认值 | 说明 |
 | --- | --- | --- |
-| `gitLogWorkbench.commit.testCommand` | `""` | *Run tests* 检查执行的命令，在仓库根目录运行（如 `pnpm test`） |
-| `gitLogWorkbench.commit.subjectLength` | `72` | 首行超过这个长度就提醒（0 关闭） |
-| `gitLogWorkbench.commit.bodyLineLength` | `72` | 正文某行超过这个长度就提醒（0 关闭） |
-| `gitLogWorkbench.commit.blankLineAfterSubject` | `true` | 首行后没有空行时提醒 |
 | `gitLogWorkbench.git.path` | `"git"` | Git 可执行文件 |
 | `gitLogWorkbench.currentLineBlame.enabled` | `true` | 光标所在行后显示 blame |
 
@@ -298,7 +285,6 @@ pnpm run build
 ```text
 pnpm run package
 ```
-
 
 ## 使用提示
 

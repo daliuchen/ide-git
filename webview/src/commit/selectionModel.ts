@@ -3,8 +3,8 @@ import { changeId } from './buildChangeTree';
 
 /**
  * What the next commit includes, at file, chunk, and line level. Explicit choices are recorded;
- * everything else follows the defaults: the active changelist (and the chunks assigned to it) is
- * included, unversioned files, conflicts, and other changelists are not.
+ * everything else follows the defaults: tracked changes are included, unversioned files and
+ * conflicts are not.
  */
 export interface SelectionState {
   included: ReadonlySet<string>;
@@ -17,7 +17,6 @@ export interface SelectionState {
 }
 
 export interface SelectionContext {
-  activeChangelistId: string;
   hunks: ReadonlyMap<string, readonly CommitViewHunk[]>;
 }
 
@@ -34,14 +33,6 @@ export const EMPTY_SELECTION: SelectionState = {
 const hunkKey = (file: string, hunk: string): string => `${file}\0${hunk}`;
 const lineKey = (file: string, hunk: string, index: number): string => `${file}\0${hunk}\0${String(index)}`;
 
-export function isSplit(change: CommitViewChange): boolean {
-  return Boolean(change.hunkChangelists && Object.keys(change.hunkChangelists).length);
-}
-
-export function hunkChangelist(change: CommitViewChange, hunk: Pick<CommitViewHunk, 'id'>): string | undefined {
-  return change.hunkChangelists?.[hunk.id] ?? change.changelistId;
-}
-
 /** Indexes of a hunk's `-`/`+` lines, the ones that can be selected individually. */
 export function selectableLines(hunk: CommitViewHunk): number[] {
   if (hunk.linesTruncated) return [];
@@ -52,30 +43,21 @@ export function selectableLines(hunk: CommitViewHunk): number[] {
   return indexes;
 }
 
-export function fileIncluded(change: CommitViewChange, state: SelectionState, context: SelectionContext): boolean {
+export function fileIncluded(change: CommitViewChange, state: SelectionState): boolean {
   if (change.status === 'U') return false;
   const id = changeId(change);
   if (state.excluded.has(id)) return false;
   if (state.included.has(id)) return true;
-  if (change.status === '?') return false;
-  return (
-    change.changelistId === context.activeChangelistId ||
-    Object.values(change.hunkChangelists ?? {}).includes(context.activeChangelistId)
-  );
+  return change.status !== '?';
 }
 
 export function hunkIncluded(
   change: CommitViewChange,
   hunk: CommitViewHunk,
   state: SelectionState,
-  context: SelectionContext,
 ): boolean {
-  if (!fileIncluded(change, state, context)) return false;
-  const key = hunkKey(changeId(change), hunk.id);
-  if (state.excludedHunks.has(key)) return false;
-  if (state.includedHunks.has(key)) return true;
-  // In a file split across changelists, only the active changelist's chunks start included.
-  return !isSplit(change) || hunkChangelist(change, hunk) === context.activeChangelistId;
+  if (!fileIncluded(change, state)) return false;
+  return !state.excludedHunks.has(hunkKey(changeId(change), hunk.id));
 }
 
 export function lineIncluded(
@@ -83,34 +65,20 @@ export function lineIncluded(
   hunk: CommitViewHunk,
   index: number,
   state: SelectionState,
-  context: SelectionContext,
 ): boolean {
-  return hunkIncluded(change, hunk, state, context) && !state.excludedLines.has(lineKey(changeId(change), hunk.id, index));
+  return hunkIncluded(change, hunk, state) && !state.excludedLines.has(lineKey(changeId(change), hunk.id, index));
 }
 
 export function hunkState(
   change: CommitViewChange,
   hunk: CommitViewHunk,
   state: SelectionState,
-  context: SelectionContext,
 ): CheckState {
-  if (!hunkIncluded(change, hunk, state, context)) return 'unchecked';
+  if (!hunkIncluded(change, hunk, state)) return 'unchecked';
   const file = changeId(change);
   return selectableLines(hunk).some((index) => state.excludedLines.has(lineKey(file, hunk.id, index)))
     ? 'mixed'
     : 'checked';
-}
-
-/** The loaded hunks of a file that belong to a changelist group (all hunks outside such a group). */
-export function groupHunks(
-  change: CommitViewChange,
-  listId: string | undefined,
-  context: SelectionContext,
-): readonly CommitViewHunk[] | undefined {
-  const loaded = context.hunks.get(changeId(change));
-  if (!loaded) return undefined;
-  if (!listId || !isSplit(change)) return loaded;
-  return loaded.filter((hunk) => hunkChangelist(change, hunk) === listId);
 }
 
 function combine(states: readonly CheckState[]): CheckState {
@@ -120,24 +88,18 @@ function combine(states: readonly CheckState[]): CheckState {
   return 'mixed';
 }
 
-export function fileState(
-  change: CommitViewChange,
-  listId: string | undefined,
-  state: SelectionState,
-  context: SelectionContext,
-): CheckState {
-  const hunks = groupHunks(change, listId, context);
-  if (!hunks?.length) return fileIncluded(change, state, context) ? 'checked' : 'unchecked';
-  return combine(hunks.map((hunk) => hunkState(change, hunk, state, context)));
+export function fileState(change: CommitViewChange, state: SelectionState, context: SelectionContext): CheckState {
+  const hunks = context.hunks.get(changeId(change));
+  if (!hunks?.length) return fileIncluded(change, state) ? 'checked' : 'unchecked';
+  return combine(hunks.map((hunk) => hunkState(change, hunk, state)));
 }
 
 export function nodeState(
   changes: readonly CommitViewChange[],
-  listId: string | undefined,
   state: SelectionState,
   context: SelectionContext,
 ): CheckState {
-  return combine(changes.map((change) => fileState(change, listId, state, context)));
+  return combine(changes.map((change) => fileState(change, state, context)));
 }
 
 interface Mutable {
@@ -177,29 +139,18 @@ function includeFile(next: Mutable, file: string, include: boolean): void {
   }
 }
 
-/** Checks or unchecks files (only a changelist group's chunks for files split across changelists). */
+/** Checks or unchecks whole files. */
 export function setFilesIncluded(
   changes: readonly CommitViewChange[],
-  listId: string | undefined,
   include: boolean,
   state: SelectionState,
-  context: SelectionContext,
 ): SelectionState {
   const next = clone(state);
   for (const change of changes) {
     if (change.status === 'U') continue;
     const file = changeId(change);
-    const hunks = groupHunks(change, listId, context);
-    if (listId && isSplit(change) && hunks) {
-      if (include) includeFile(next, file, true);
-      for (const hunk of hunks) {
-        clearDetail(next, file, hunk.id);
-        (include ? next.includedHunks : next.excludedHunks).add(hunkKey(file, hunk.id));
-      }
-    } else {
-      includeFile(next, file, include);
-      clearDetail(next, file);
-    }
+    includeFile(next, file, include);
+    clearDetail(next, file);
   }
   return next;
 }
@@ -213,8 +164,8 @@ export function toggleHunk(
   const next = clone(state);
   const file = changeId(change);
   const key = hunkKey(file, hunk.id);
-  const wasFileIncluded = fileIncluded(change, state, context);
-  const include = !hunkIncluded(change, hunk, state, context);
+  const wasFileIncluded = fileIncluded(change, state);
+  const include = !hunkIncluded(change, hunk, state);
   clearDetail(next, file, hunk.id);
   if (include) {
     if (!wasFileIncluded) {
@@ -240,7 +191,7 @@ export function toggleLine(
 ): SelectionState {
   const file = changeId(change);
   const lines = selectableLines(hunk);
-  if (!hunkIncluded(change, hunk, state, context)) {
+  if (!hunkIncluded(change, hunk, state)) {
     // Checking one line of an unchecked chunk selects only that line.
     const next = clone(toggleHunk(change, hunk, state, context));
     for (const other of lines) if (other !== index) next.excludedLines.add(lineKey(file, hunk.id, other));
@@ -271,7 +222,7 @@ export function commitSelection(
   state: SelectionState,
   context: SelectionContext,
 ): FileCommitSelection | undefined {
-  if (!fileIncluded(change, state, context)) return undefined;
+  if (!fileIncluded(change, state)) return undefined;
   const loaded = context.hunks.get(changeId(change));
   if (!loaded?.length) return {};
   const file = changeId(change);
@@ -279,7 +230,7 @@ export function commitSelection(
   const lines: Record<string, number[]> = {};
   let whole = true;
   for (const hunk of loaded) {
-    if (!hunkIncluded(change, hunk, state, context)) {
+    if (!hunkIncluded(change, hunk, state)) {
       whole = false;
       continue;
     }

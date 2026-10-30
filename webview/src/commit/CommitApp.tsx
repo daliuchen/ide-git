@@ -7,7 +7,6 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from 'react';
@@ -21,11 +20,8 @@ import type {
   CommitViewLayout,
   CommitViewRepository,
   CommitWebviewMessage,
-  MessageRules,
 } from '../../../src/commit/commitProtocol';
 import { DEFAULT_COMMIT_CHECKS, DEFAULT_COMMIT_VIEW_LAYOUT } from '../../../src/commit/commitProtocol';
-import type { Changelist } from '../../../src/commit/changelists';
-import { checkCommitMessage, wrapCommitMessage } from '../../../src/commit/commitMessage';
 import {
   buildChangeTree,
   changeId,
@@ -37,10 +33,7 @@ import {
   EMPTY_SELECTION,
   commitSelection,
   commitStats,
-  groupHunks,
-  hunkChangelist,
   hunkState,
-  isSplit,
   lineIncluded,
   nodeState,
   onHunksReloaded,
@@ -90,12 +83,8 @@ function restoreSelection(saved: PersistedViewState['selection']): SelectionStat
 interface ViewData {
   repositories: CommitViewRepository[];
   changes: CommitViewChange[];
-  changelists: Changelist[];
-  activeChangelistId: string;
   messageHistory: string[];
   recentAuthors: string[];
-  messageRules: MessageRules;
-  template?: string;
   loaded: boolean;
 }
 
@@ -115,17 +104,11 @@ const STATUS_LABEL: Record<CommitViewChange['status'], string> = {
 };
 
 const CHECK_LABELS: { key: keyof CommitChecks; label: string; title: string }[] = [
-  { key: 'reformat', label: 'Reformat code', title: 'Format the committed files with the editor formatter first' },
-  { key: 'optimizeImports', label: 'Optimize imports', title: 'Run “Organize Imports” on the committed files first' },
-  { key: 'analyze', label: 'Analyze code', title: 'Stop when the committed files have errors or warnings' },
-  { key: 'checkTodo', label: 'Check TODO', title: 'Stop when the changes add TODO or FIXME comments' },
-  { key: 'runTests', label: 'Run tests', title: 'Run the configured test command (gitLogWorkbench.commit.testCommand)' },
   { key: 'runHooks', label: 'Run Git hooks', title: 'Clear to commit with --no-verify' },
 ];
 
 const isMac = navigator.platform.toLowerCase().includes('mac');
 const modKey = isMac ? '⌘' : 'Ctrl+';
-const DRAG_TYPE = 'application/x-git-log-changes';
 
 function post(message: CommitWebviewMessage): void {
   vscode.postMessage(message);
@@ -170,11 +153,8 @@ export function CommitApp() {
   const [data, setData] = useState<ViewData>({
     repositories: [],
     changes: [],
-    changelists: [],
-    activeChangelistId: 'default',
     messageHistory: [],
     recentAuthors: [],
-    messageRules: { subjectLength: 72, bodyLineLength: 72, blankLineAfterSubject: true },
     loaded: false,
   });
   const [layout, setLayout] = useState<CommitViewLayout>(DEFAULT_COMMIT_VIEW_LAYOUT);
@@ -200,7 +180,6 @@ export function CommitApp() {
   const [notice, setNotice] = useState<string>();
   const [menu, setMenu] = useState<MenuState>();
   const [menuPosition, setMenuPosition] = useState<CSSProperties>();
-  const [dropTarget, setDropTarget] = useState<string>();
   const treeRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const messageRef = useRef<HTMLTextAreaElement>(null);
@@ -208,8 +187,8 @@ export function CommitApp() {
   const amendRef = useRef(amend);
   const hunksRef = useRef(hunks);
   const messageValueRef = useRef(message);
-  const previousStateRef = useRef<{ activeId: string; changelists: Changelist[] }>(undefined);
-  /** Files whose chunks are reloaded after a refresh: expanded, partially selected, or split. */
+  const receivedStateRef = useRef(false);
+  /** Files whose chunks are reloaded after a refresh: expanded or partially selected. */
   const hunkFilesRef = useRef(new Set<string>());
   useEffect(() => {
     amendRef.current = amend;
@@ -251,12 +230,8 @@ export function CommitApp() {
           setData({
             repositories: incoming.repositories,
             changes: incoming.changes,
-            changelists: incoming.changelists,
-            activeChangelistId: incoming.activeChangelistId,
             messageHistory: incoming.messageHistory,
             recentAuthors: incoming.recentAuthors,
-            messageRules: incoming.messageRules,
-            ...(incoming.template ? { template: incoming.template } : {}),
             loaded: true,
           });
           setLayout(incoming.layout);
@@ -265,23 +240,12 @@ export function CommitApp() {
           // Chunks can shift after any change on disk. Reload the ones in use; a selection that no
           // longer matches is rejected at commit time instead of silently committing the whole file.
           for (const change of incoming.changes) {
-            if (hunkFilesRef.current.has(changeId(change)) || isSplit(change)) requestHunks(change);
+            if (hunkFilesRef.current.has(changeId(change))) requestHunks(change);
           }
-          const active = incoming.changelists.find((list) => list.id === incoming.activeChangelistId);
-          const previous = previousStateRef.current;
-          previousStateRef.current = { activeId: incoming.activeChangelistId, changelists: incoming.changelists };
-          if (!previous) {
-            const initial = messageValueRef.current || (incoming.draft ?? active?.comment ?? incoming.template ?? '');
+          if (!receivedStateRef.current) {
+            receivedStateRef.current = true;
+            const initial = messageValueRef.current || (incoming.draft ?? '');
             if (initial) setMessage(initial);
-          } else if (previous.activeId !== incoming.activeChangelistId) {
-            // Switching the active changelist starts from its defaults, like opening an IDE commit
-            // dialog for it: its changes are selected and its description becomes the message.
-            setSelection(EMPTY_SELECTION);
-            const previousComment = previous.changelists.find((list) => list.id === previous.activeId)?.comment;
-            const current = messageValueRef.current.trim();
-            if (!current || current === previousComment?.trim() || current === incoming.template?.trim()) {
-              setMessage(active?.comment ?? incoming.template ?? '');
-            }
           }
           break;
         }
@@ -354,8 +318,8 @@ export function CommitApp() {
   };
 
   const context: SelectionContext = useMemo(
-    () => ({ activeChangelistId: data.activeChangelistId, hunks }),
-    [data.activeChangelistId, hunks],
+    () => ({ hunks }),
+    [hunks],
   );
 
   const tree = useMemo(
@@ -363,8 +327,6 @@ export function CommitApp() {
       buildChangeTree({
         changes: data.changes,
         repositories: data.repositories,
-        changelists: data.changelists,
-        activeChangelistId: data.activeChangelistId,
         groupByDirectory: layout.groupByDirectory,
         showUnversioned: layout.showUnversioned,
       }),
@@ -407,12 +369,11 @@ export function CommitApp() {
       ),
     [data.changes, selection, context],
   );
-  const messageIssues = useMemo(() => checkCommitMessage(message, data.messageRules), [message, data.messageRules]);
   const conflicts = data.changes.filter((change) => change.status === 'U').length;
   const operationRepository = data.repositories.find((repository) => repository.operationState);
 
   const runAction = useCallback(
-    (action: CommitAction, changes: readonly CommitViewChange[], preview = false, changelistId?: string) => {
+    (action: CommitAction, changes: readonly CommitViewChange[], preview = false) => {
       if (!changes.length) return;
       setMenu(undefined);
       post({
@@ -420,15 +381,14 @@ export function CommitApp() {
         action,
         items: refs(changes),
         ...(preview ? { preview: true } : {}),
-        ...(changelistId ? { changelistId } : {}),
       });
     },
     [],
   );
 
   const toggleNode = (node: ChangeTreeNode): void => {
-    const state = nodeState(node.changes, node.listId, selection, context);
-    setSelection((current) => setFilesIncluded(node.changes, node.listId, state !== 'checked', current, context));
+    const state = nodeState(node.changes, selection, context);
+    setSelection((current) => setFilesIncluded(node.changes, state !== 'checked', current));
   };
 
   const toggleHunksOpen = (change: CommitViewChange): void => {
@@ -445,9 +405,8 @@ export function CommitApp() {
 
   const toggleSelection = (): void => {
     if (!selectedNodes.length) return;
-    const listId = selectedNodes[0]?.listId;
-    const state = nodeState(selectedChanges, listId, selection, context);
-    setSelection((current) => setFilesIncluded(selectedChanges, listId, state !== 'checked', current, context));
+    const state = nodeState(selectedChanges, selection, context);
+    setSelection((current) => setFilesIncluded(selectedChanges, state !== 'checked', current));
   };
 
   const select = (node: ChangeTreeNode, event?: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }): void => {
@@ -532,11 +491,6 @@ export function CommitApp() {
       messageRef.current?.focus();
       return;
     }
-    if (data.template && message.trim() === data.template.trim()) {
-      setError('Edit the commit message template before committing.');
-      messageRef.current?.focus();
-      return;
-    }
     if (!commitItems.length && !amend) {
       setError('Select at least one change to commit.');
       return;
@@ -582,19 +536,15 @@ export function CommitApp() {
           }
         }
       }
-    } else if (event.key === ' ' && event.ctrlKey && focused?.changelistId) {
-      post({ type: 'setActiveChangelist', id: focused.changelistId });
     } else if (event.key === ' ') toggleSelection();
     else if (event.key === 'Enter' || (mod && event.key.toLowerCase() === 'd')) {
       if (focused?.children.length && event.key === 'Enter') toggleCollapsed(focused);
       else runAction('showDiff', selectedChanges);
     } else if (event.key === 'F4') runAction('openSource', selectedChanges);
-    else if (event.key === 'F2' && focused?.changelistId) post({ type: 'renameChangelist', id: focused.changelistId });
     else if ((event.key === 'Delete' || (isMac && event.key === 'Backspace' && event.metaKey)) && selectedChanges.length) {
       if (selectedChanges.every((change) => change.status === '?')) runAction('delete', selectedChanges);
       else runAction('rollback', selectedChanges);
     } else if (event.altKey && mod && event.key.toLowerCase() === 'z') runAction('rollback', selectedChanges);
-    else if (event.altKey && event.shiftKey && event.code === 'KeyM') runAction('moveToChangelist', selectedChanges);
     else if (mod && event.key.toLowerCase() === 'a') {
       setSelected(new Set(rows.map((row) => row.id)));
     } else if (mod && event.key.toLowerCase() === 'c') {
@@ -621,33 +571,12 @@ export function CommitApp() {
     window.addEventListener('mouseup', onUp);
   };
 
-  /** Dragging files onto a changelist moves them there. */
-  const onDragStart = (event: ReactDragEvent<HTMLDivElement>, node: ChangeTreeNode): void => {
-    const movable = (selected.has(node.id) ? selectedChanges : node.changes).filter(
-      (change) => change.status !== '?' && change.status !== 'U',
-    );
-    if (!movable.length) {
-      event.preventDefault();
-      return;
-    }
-    event.dataTransfer.setData(DRAG_TYPE, JSON.stringify(refs(movable)));
-    event.dataTransfer.effectAllowed = 'move';
-  };
-  const onDrop = (event: ReactDragEvent<HTMLDivElement>, node: ChangeTreeNode): void => {
-    setDropTarget(undefined);
-    const raw = event.dataTransfer.getData(DRAG_TYPE);
-    if (!raw || !node.changelistId) return;
-    event.preventDefault();
-    const items = JSON.parse(raw) as ChangeRef[];
-    post({ type: 'action', action: 'moveToChangelist', items, changelistId: node.changelistId });
-  };
-
   const indent = (depth: number): CSSProperties => ({ paddingLeft: 22 + depth * 14 });
 
   const renderLines = (change: CommitViewChange, hunk: CommitViewHunk, depth: number) =>
     selectableLines(hunk).map((index) => {
       const line = hunk.lines[index] ?? '';
-      const included = lineIncluded(change, hunk, index, selection, context);
+      const included = lineIncluded(change, hunk, index, selection);
       return (
         <div
           key={`${hunk.id}:${String(index)}`}
@@ -666,20 +595,19 @@ export function CommitApp() {
     });
 
   const renderHunks = (node: ChangeTreeNode, change: CommitViewChange) => {
-    const loaded = groupHunks(change, node.listId, context);
+    const loaded = context.hunks.get(changeId(change));
     if (loaded === undefined) return <div className="hunk-row empty-hunks" style={indent(node.depth + 1)}>Loading changes…</div>;
     if (!loaded.length) return <div className="hunk-row empty-hunks" style={indent(node.depth + 1)}>No text changes.</div>;
     return loaded.map((hunk) => {
       const preview = hunk.added[0] ?? hunk.removed[0] ?? '';
       const lineKey = `${changeId(change)}\0${hunk.id}`;
       const linesOpen = openLines.has(lineKey);
-      const otherList = isSplit(change) && !node.listId ? hunkChangelist(change, hunk) : undefined;
       return (
         <Fragment key={hunk.id}>
           <div
             className="hunk-row"
             style={indent(node.depth + 1)}
-            title={`${[...hunk.removed.map((line) => `- ${line}`), ...hunk.added.map((line) => `+ ${line}`)].join('\n')}\n\nExpand to select individual lines; right-click to move to another changelist.`}
+            title={`${[...hunk.removed.map((line) => `- ${line}`), ...hunk.added.map((line) => `+ ${line}`)].join('\n')}\n\nExpand to select individual lines.`}
             onDoubleClick={() => runAction('showDiff', [change])}
             onContextMenu={(event) => {
               event.preventDefault();
@@ -701,14 +629,13 @@ export function CommitApp() {
               }}
             />
             <Checkbox
-              state={hunkState(change, hunk, selection, context)}
+              state={hunkState(change, hunk, selection)}
               onToggle={() => setSelection((current) => toggleHunk(change, hunk, current, context))}
             />
             <span className="hunk-line">L{hunk.newStart}</span>
             {hunk.removedCount ? <span className="deleted">−{hunk.removedCount}</span> : null}
             {hunk.addedCount ? <span className="added">+{hunk.addedCount}</span> : null}
             <span className="hunk-preview">{preview.trim()}</span>
-            {otherList ? <span className="detail">{data.changelists.find((list) => list.id === otherList)?.name}</span> : null}
           </div>
           {linesOpen ? renderLines(change, hunk, node.depth + 2) : null}
         </Fragment>
@@ -718,14 +645,11 @@ export function CommitApp() {
 
   const renderRow = (node: ChangeTreeNode) => {
     const change = node.change;
-    const state = nodeState(node.changes, node.listId, selection, context);
+    const state = nodeState(node.changes, selection, context);
     const isConflictOnly = node.changes.length > 0 && node.changes.every((candidate) => candidate.status === 'U');
-    const list = node.kind === 'group' ? data.changelists.find((candidate) => candidate.id === node.changelistId) : undefined;
-    const isActiveList = node.changelistId === data.activeChangelistId;
     const expandable = node.children.length > 0 || node.kind === 'group';
     const chunkable = Boolean(change && (change.status === 'M' || change.status === 'T') && !change.binary);
     const chunksOpen = Boolean(change && openHunks.has(changeId(change)));
-    const draggable = node.kind !== 'group' && node.changes.some((candidate) => candidate.status !== '?' && candidate.status !== 'U');
     return (
       <Fragment key={node.id}>
         <div
@@ -734,23 +658,13 @@ export function CommitApp() {
           aria-level={node.depth + 1}
           aria-selected={selected.has(node.id)}
           aria-expanded={expandable ? !collapsed.has(node.id) : undefined}
-          className={`tree-row kind-${node.kind}${selected.has(node.id) ? ' selected' : ''}${focusedId === node.id ? ' focused' : ''}${dropTarget === node.id ? ' drop-target' : ''}`}
+          className={`tree-row kind-${node.kind}${selected.has(node.id) ? ' selected' : ''}${focusedId === node.id ? ' focused' : ''}`}
           style={{ paddingLeft: 4 + node.depth * 14 }}
           title={
             change
-              ? `${change.oldPath ? `${change.oldPath} → ` : ''}${change.path}\n${STATUS_LABEL[change.status]}${isSplit(change) ? '\nSplit across changelists' : ''}`
-              : (list?.comment ?? node.detail)
+              ? `${change.oldPath ? `${change.oldPath} → ` : ''}${change.path}\n${STATUS_LABEL[change.status]}`
+              : node.detail
           }
-          draggable={draggable}
-          onDragStart={(event) => onDragStart(event, node)}
-          onDragOver={(event) => {
-            if (node.kind !== 'group' || !node.changelistId || !event.dataTransfer.types.includes(DRAG_TYPE)) return;
-            event.preventDefault();
-            event.dataTransfer.dropEffect = 'move';
-            setDropTarget(node.id);
-          }}
-          onDragLeave={() => setDropTarget((current) => (current === node.id ? undefined : current))}
-          onDrop={(event) => onDrop(event, node)}
           onMouseDown={(event) => {
             if (event.button !== 0) return;
             select(node, event);
@@ -787,10 +701,10 @@ export function CommitApp() {
           {node.kind === 'repository' ? <i className="codicon codicon-repo node-icon" /> : null}
           {node.kind === 'file' && change ? (
             <i
-              className={`codicon codicon-${change.status === 'D' ? 'diff-removed' : change.status === '?' ? 'question' : change.status === 'U' ? 'warning' : isSplit(change) ? 'split-horizontal' : 'file'} node-icon`}
+              className={`codicon codicon-${change.status === 'D' ? 'diff-removed' : change.status === '?' ? 'question' : change.status === 'U' ? 'warning' : 'file'} node-icon`}
             />
           ) : null}
-          <span className={`label${change ? ` status-${change.status === '?' ? 'unversioned' : change.status}` : ''}${isActiveList ? ' active-list' : ''}`}>
+          <span className={`label${change ? ` status-${change.status === '?' ? 'unversioned' : change.status}` : ''}`}>
             {node.label}
           </span>
           {node.kind === 'file' && change?.oldPath && change.status === 'R' ? <span className="detail">← {change.oldPath}</span> : null}
@@ -799,8 +713,6 @@ export function CommitApp() {
           {node.kind === 'group' ? (
             <span className="detail">
               {node.changes.length ? plural(node.changes.length, 'file') : 'no files'}
-              {isActiveList && data.changelists.length > 1 ? ' · active' : ''}
-              {list?.comment ? ` · ${list.comment.split('\n')[0] ?? ''}` : ''}
             </span>
           ) : null}
           {node.kind === 'directory' ? <span className="detail">{plural(node.changes.length, 'file')}</span> : null}
@@ -820,12 +732,11 @@ export function CommitApp() {
   const menuHasTracked = menuChanges.some((change) => change.status !== '?' && change.status !== 'U');
   const menuHasUnversioned = menuChanges.some((change) => change.status === '?');
   const menuHasConflicts = menuChanges.some((change) => change.status === 'U');
-  const menuChangelistId = menu?.kind === 'node' && menu.node.kind === 'group' ? menu.node.changelistId : undefined;
   const singleRepository = data.repositories.length === 1 ? data.repositories[0] : undefined;
-  const enabledChecks = CHECK_LABELS.filter(({ key }) => key !== 'runHooks' && checks[key]).length + (checks.runHooks ? 0 : 1);
+  const enabledChecks = checks.runHooks ? 0 : 1;
 
   return (
-    <div className="commit-shell" style={{ gridTemplateRows: `auto auto minmax(60px, 1fr) 4px ${String(layout.messageHeight + 70 + Math.min(messageIssues.length, 3) * 18)}px` }}>
+    <div className="commit-shell" style={{ gridTemplateRows: `auto auto minmax(60px, 1fr) 4px ${String(layout.messageHeight + 70)}px` }}>
       <header className="commit-toolbar" role="toolbar" aria-label="Local changes actions">
         <button type="button" title="Refresh" onClick={() => post({ type: 'refresh' })}>
           <i className="codicon codicon-refresh" />
@@ -848,13 +759,6 @@ export function CommitApp() {
           onClick={() => post({ type: 'shelve', items: refs(selectedChanges.filter((change) => change.status !== 'U')), message: message.split('\n')[0] ?? '' })}
         >
           <i className="codicon codicon-archive" />
-        </button>
-        <button
-          type="button"
-          title="New Changelist…"
-          onClick={() => post({ type: 'newChangelist', items: refs(selectedChanges.filter((change) => change.status !== '?' && change.status !== 'U')) })}
-        >
-          <i className="codicon codicon-new-folder" />
         </button>
         <span className="toolbar-separator" />
         <button
@@ -1030,18 +934,6 @@ export function CommitApp() {
             }
           }}
         />
-        {messageIssues.length ? (
-          <div className="message-issues" role="status">
-            {messageIssues.slice(0, 3).map((issue) => (
-              <div key={`${String(issue.line)}:${issue.text}`}>
-                <i className="codicon codicon-warning" /> {issue.text}
-              </div>
-            ))}
-            <button type="button" className="link-button" onClick={() => updateMessage(wrapCommitMessage(message, data.messageRules.bodyLineLength || 72))}>
-              Wrap and fix blank line
-            </button>
-          </div>
-        ) : null}
         <div className="commit-actions">
           <button type="button" className="primary" disabled={Boolean(busy)} onClick={() => commit(false)} title={`${modKey}Enter`}>
             {amend ? 'Amend Commit' : 'Commit'}
@@ -1069,48 +961,11 @@ export function CommitApp() {
         <div ref={menuRef} className="context-menu" role="menu" style={menuPosition ?? { left: menu.x, top: menu.y, visibility: 'hidden' }}>
           {menu.kind === 'hunk' ? (
             <>
-              <MenuItem
-                label="Move to Another Changelist…"
-                onSelect={() => {
-                  setMenu(undefined);
-                  post({ type: 'moveHunks', item: { repositoryId: menu.change.repositoryId, path: menu.change.path }, hunkIds: [menu.hunk.id] });
-                }}
-              />
               <MenuItem label="Show Diff" onSelect={() => runAction('showDiff', [menu.change])} />
               <MenuItem label="Jump to Source" onSelect={() => runAction('openSource', [menu.change])} />
             </>
           ) : (
             <>
-              {menuChangelistId ? (
-                <>
-                  <MenuItem
-                    label="Set Active Changelist"
-                    shortcut="Ctrl+Space"
-                    disabled={menuChangelistId === data.activeChangelistId}
-                    onSelect={() => {
-                      setMenu(undefined);
-                      post({ type: 'setActiveChangelist', id: menuChangelistId });
-                    }}
-                  />
-                  <MenuItem
-                    label="Edit Changelist…"
-                    shortcut="F2"
-                    onSelect={() => {
-                      setMenu(undefined);
-                      post({ type: 'renameChangelist', id: menuChangelistId });
-                    }}
-                  />
-                  <MenuItem
-                    label="Delete Changelist…"
-                    disabled={menuChangelistId === 'default'}
-                    onSelect={() => {
-                      setMenu(undefined);
-                      post({ type: 'deleteChangelist', id: menuChangelistId });
-                    }}
-                  />
-                  <div className="menu-separator" />
-                </>
-              ) : null}
               {menuHasConflicts ? (
                 <>
                   <MenuItem label="Merge…" onSelect={() => runAction('openMerge', menuChanges.filter((change) => change.status === 'U'))} />
@@ -1129,20 +984,12 @@ export function CommitApp() {
                 onSelect={() => {
                   setMenu(undefined);
                   setSelection((current) =>
-                    setFilesIncluded(menuChanges, undefined, true, setFilesIncluded(data.changes, undefined, false, current, context), context),
+                    setFilesIncluded(menuChanges, true, setFilesIncluded(data.changes, false, current)),
                   );
                   messageRef.current?.focus();
                 }}
               />
               <MenuItem label="Rollback…" shortcut={`${modKey}${isMac ? '⌥' : 'Alt+'}Z`} disabled={!menuHasTracked} onSelect={() => runAction('rollback', menuChanges)} />
-              <MenuItem label="Move to Another Changelist…" shortcut={isMac ? '⌥⇧M' : 'Alt+Shift+M'} disabled={!menuHasTracked} onSelect={() => runAction('moveToChangelist', menuChanges)} />
-              <MenuItem
-                label="New Changelist…"
-                onSelect={() => {
-                  setMenu(undefined);
-                  post({ type: 'newChangelist', items: refs(menuChanges.filter((change) => change.status !== '?' && change.status !== 'U')) });
-                }}
-              />
               <MenuItem
                 label="Shelve Changes…"
                 disabled={!menuChanges.some((change) => change.status !== 'U')}

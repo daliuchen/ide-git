@@ -2,9 +2,8 @@ import type {
   CommitViewChange,
   CommitViewRepository,
 } from '../../../src/commit/commitProtocol';
-import type { Changelist } from '../../../src/commit/changelists';
 
-export type ChangeGroupKind = 'changelist' | 'unversioned' | 'conflicts';
+export type ChangeGroupKind = 'changes' | 'unversioned' | 'conflicts';
 
 export interface ChangeTreeNode {
   id: string;
@@ -18,9 +17,6 @@ export interface ChangeTreeNode {
   changes: CommitViewChange[];
   change?: CommitViewChange;
   groupKind?: ChangeGroupKind;
-  changelistId?: string;
-  /** The changelist group this node sits in (for files split across changelists). */
-  listId?: string;
   repositoryId?: string;
 }
 
@@ -52,12 +48,10 @@ function compact(nodes: ChangeTreeNode[]): ChangeTreeNode[] {
   });
 }
 
-function setDepth(nodes: ChangeTreeNode[], depth: number, listId?: string): void {
+function setDepth(nodes: ChangeTreeNode[], depth: number): void {
   for (const node of nodes) {
     node.depth = depth;
-    const groupList = node.kind === 'group' ? node.changelistId : listId;
-    if (groupList) node.listId = groupList;
-    setDepth(node.children, depth + 1, groupList);
+    setDepth(node.children, depth + 1);
   }
 }
 
@@ -155,8 +149,6 @@ function buildGroupChildren(
 export interface BuildChangeTreeOptions {
   changes: readonly CommitViewChange[];
   repositories: readonly CommitViewRepository[];
-  changelists: readonly Changelist[];
-  activeChangelistId: string;
   groupByDirectory: boolean;
   showUnversioned: boolean;
 }
@@ -176,27 +168,17 @@ export function buildChangeTree(options: BuildChangeTreeOptions): ChangeTreeNode
       changes: conflicts,
     });
   }
-  const lists = [...options.changelists].sort((left, right) =>
-    left.id === options.activeChangelistId ? -1 : right.id === options.activeChangelistId ? 1 : 0,
-  );
-  for (const list of lists) {
-    const listChanges = changes.filter(
-      (change) =>
-        change.changelistId === list.id || Object.values(change.hunkChangelists ?? {}).includes(list.id),
-    );
-    // Empty changelists stay visible so files can be moved into them.
-    const id = `g|cl|${list.id}`;
-    groups.push({
-      id,
-      kind: 'group',
-      groupKind: 'changelist',
-      changelistId: list.id,
-      label: list.name,
-      depth: 0,
-      children: buildGroupChildren(id, listChanges, repositories, groupByDirectory),
-      changes: listChanges,
-    });
-  }
+  const tracked = changes.filter((change) => change.status !== 'U' && change.status !== '?');
+  // Stays visible when empty so the view never looks broken.
+  groups.push({
+    id: 'g|changes',
+    kind: 'group',
+    groupKind: 'changes',
+    label: 'Changes',
+    depth: 0,
+    children: buildGroupChildren('g|changes', tracked, repositories, groupByDirectory),
+    changes: tracked,
+  });
   const unversioned = changes.filter((change) => change.status === '?');
   if (options.showUnversioned && unversioned.length) {
     groups.push({

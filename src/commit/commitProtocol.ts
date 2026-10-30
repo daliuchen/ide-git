@@ -1,4 +1,3 @@
-import type { Changelist } from './changelists';
 import type { LocalChange } from './localChanges';
 
 const MAX_ITEMS = 10_000;
@@ -13,30 +12,15 @@ export interface ChangeRef {
   lines?: Record<string, number[]>;
 }
 
-/** Checks run before committing, like an IDE's commit checks. */
+/** Commit options kept between commits. */
 export interface CommitChecks {
-  reformat: boolean;
-  optimizeImports: boolean;
-  analyze: boolean;
-  checkTodo: boolean;
-  runTests: boolean;
+  /** Run the repository's Git hooks (off = `--no-verify`). */
   runHooks: boolean;
 }
 
 export const DEFAULT_COMMIT_CHECKS: CommitChecks = {
-  reformat: false,
-  optimizeImports: false,
-  analyze: false,
-  checkTodo: false,
-  runTests: false,
   runHooks: true,
 };
-
-export interface MessageRules {
-  subjectLength: number;
-  bodyLineLength: number;
-  blankLineAfterSubject: boolean;
-}
 
 export interface CommitViewHunk {
   id: string;
@@ -55,10 +39,6 @@ export interface CommitViewHunk {
 
 export interface CommitViewChange extends LocalChange {
   repositoryId: string;
-  /** Changelist id; unversioned and conflicted changes are not in a changelist. */
-  changelistId?: string;
-  /** Chunks assigned to a different changelist than the file: hunk id → changelist id. */
-  hunkChangelists?: Record<string, string>;
 }
 
 export interface CommitViewRepository {
@@ -101,14 +81,12 @@ export type CommitAction =
   | 'acceptOurs'
   | 'acceptTheirs'
   | 'openMerge'
-  | 'markResolved'
-  | 'moveToChangelist';
+  | 'markResolved';
 
 export type CommitWebviewMessage =
   | { type: 'ready' }
   | { type: 'refresh' }
-  | { type: 'action'; action: CommitAction; items: ChangeRef[]; preview?: boolean; changelistId?: string }
-  | { type: 'moveHunks'; item: ChangeRef; hunkIds: string[]; changelistId?: string }
+  | { type: 'action'; action: CommitAction; items: ChangeRef[]; preview?: boolean }
   | {
       type: 'commit';
       message: string;
@@ -121,11 +99,7 @@ export type CommitWebviewMessage =
     }
   | { type: 'shelve'; items: ChangeRef[]; message: string }
   | { type: 'requestAmendMessage'; repositoryId?: string }
-  | { type: 'newChangelist'; items: ChangeRef[] }
-  | { type: 'renameChangelist'; id: string }
   | { type: 'updateChecks'; checks: CommitChecks }
-  | { type: 'deleteChangelist'; id: string }
-  | { type: 'setActiveChangelist'; id: string }
   | { type: 'requestHunks'; item: ChangeRef }
   | { type: 'updateLayout'; layout: CommitViewLayout }
   | { type: 'saveDraft'; message: string };
@@ -135,15 +109,11 @@ export type CommitExtensionMessage =
       type: 'state';
       repositories: CommitViewRepository[];
       changes: CommitViewChange[];
-      changelists: Changelist[];
-      activeChangelistId: string;
       messageHistory: string[];
       layout: CommitViewLayout;
       draft?: string;
-      template?: string;
       checks: CommitChecks;
       recentAuthors: string[];
-      messageRules: MessageRules;
     }
   | { type: 'amendMessage'; message: string }
   | { type: 'committed'; summary: string; keepMessage: boolean }
@@ -218,7 +188,6 @@ const ACTIONS = new Set<CommitAction>([
   'acceptTheirs',
   'openMerge',
   'markResolved',
-  'moveToChangelist',
 ]);
 
 function parseLayout(value: unknown): CommitViewLayout | undefined {
@@ -259,31 +228,11 @@ export function parseCommitWebviewMessage(value: unknown): CommitWebviewMessage 
       if (!items || typeof value.action !== 'string' || !ACTIONS.has(value.action as CommitAction)) {
         return undefined;
       }
-      if (value.changelistId !== undefined && !isId(value.changelistId)) return undefined;
       return {
         type: 'action',
         action: value.action as CommitAction,
         items,
         ...(value.preview === true ? { preview: true } : {}),
-        ...(typeof value.changelistId === 'string' ? { changelistId: value.changelistId } : {}),
-      };
-    }
-    case 'moveHunks': {
-      const [item] = parseItems([value.item]) ?? [];
-      if (
-        !item ||
-        !Array.isArray(value.hunkIds) ||
-        !value.hunkIds.length ||
-        !value.hunkIds.every((id) => typeof id === 'string' && /^[0-9a-f]{16}$/u.test(id)) ||
-        (value.changelistId !== undefined && !isId(value.changelistId))
-      ) {
-        return undefined;
-      }
-      return {
-        type: 'moveHunks',
-        item,
-        hunkIds: value.hunkIds as string[],
-        ...(typeof value.changelistId === 'string' ? { changelistId: value.changelistId } : {}),
       };
     }
     case 'updateChecks': {
@@ -327,14 +276,6 @@ export function parseCommitWebviewMessage(value: unknown): CommitWebviewMessage 
         : isId(value.repositoryId)
           ? { type: 'requestAmendMessage', repositoryId: value.repositoryId }
           : undefined;
-    case 'newChangelist': {
-      const items = parseItems(value.items);
-      return items ? { type: 'newChangelist', items } : undefined;
-    }
-    case 'renameChangelist':
-    case 'deleteChangelist':
-    case 'setActiveChangelist':
-      return isId(value.id) ? { type: value.type, id: value.id } : undefined;
     case 'requestHunks': {
       const [item] = parseItems([value.item]) ?? [];
       return item ? { type: 'requestHunks', item } : undefined;

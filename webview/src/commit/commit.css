@@ -223,10 +223,6 @@ textarea:focus-visible,
   font-weight: 600;
 }
 
-.kind-group > .label.active-list {
-  font-weight: 700;
-}
-
 .status-M,
 .status-T {
   color: var(--vscode-gitDecoration-modifiedResourceForeground);
@@ -497,12 +493,6 @@ textarea:focus-visible,
   color: var(--vscode-descriptionForeground);
 }
 
-.tree-row.drop-target {
-  outline: 1px dashed var(--vscode-focusBorder);
-  outline-offset: -1px;
-  background: var(--vscode-list-dropBackground, var(--vscode-list-hoverBackground));
-}
-
 .line-row {
   display: flex;
   align-items: center;
@@ -595,24 +585,4 @@ textarea:focus-visible,
   color: var(--vscode-descriptionForeground);
   font-size: 0.9em;
   font-weight: 600;
-}
-
-.message-issues {
-  display: grid;
-  gap: 2px;
-  color: var(--vscode-editorWarning-foreground, var(--vscode-descriptionForeground));
-  font-size: 0.9em;
-}
-
-.link-button {
-  justify-self: start;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--vscode-textLink-foreground);
-  cursor: pointer;
-}
-
-.link-button:hover {
-  text-decoration: underline;
 }

@@ -1,6 +1,5 @@
 import { randomBytes } from 'node:crypto';
 import { realpathSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as vscode from 'vscode';
@@ -11,22 +10,6 @@ import { discoverRepositories, inspectRepository } from '../repositories/discove
 import type { RepositoryRegistry } from '../repositories/RepositoryRegistry';
 import type { RepositorySummary } from '../shared/models';
 import { createWebviewHtml } from '../webview/createWebviewHtml';
-import {
-  addChangelist,
-  changeKey,
-  changelistFor,
-  editChangelist,
-  moveHunksToChangelist,
-  normalizeChangelistState,
-  pruneHunkAssignments,
-  removeChangelist,
-  setActiveChangelist,
-  syncAssignments,
-  moveToChangelist,
-  type ChangelistState,
-} from './changelists';
-import { CommitCancelled, CommitChecksRunner, type CheckedRepository } from './CommitChecksRunner';
-import { templateText } from './commitMessage';
 import {
   DEFAULT_COMMIT_CHECKS,
   DEFAULT_COMMIT_VIEW_LAYOUT,
@@ -43,7 +26,6 @@ import {
 import type { LocalChange, LocalStatus } from './localChanges';
 import type { LocalChangesService } from './LocalChangesService';
 
-const CHANGELIST_KEY = 'commit.changelists';
 const LAYOUT_KEY = 'commit.layout';
 const DRAFT_KEY = 'commit.draft';
 const HISTORY_KEY = 'commit.messageHistory';
@@ -82,10 +64,7 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
   private refreshQueued = false;
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
   private stale = true;
-  private changelists: ChangelistState;
   private busy = 0;
-  private templates = new Map<string, string>();
-  private readonly checksRunner: CommitChecksRunner;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -96,8 +75,6 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
     private readonly diffManager: DiffManager,
     private readonly hooks: CommitViewHooks,
   ) {
-    this.changelists = normalizeChangelistState(context.workspaceState.get(CHANGELIST_KEY));
-    this.checksRunner = new CommitChecksRunner(runner, output);
     const watcher = vscode.workspace.createFileSystemWatcher('**/*');
     this.disposables.push(
       watcher,
@@ -231,27 +208,6 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
           }),
         );
         this.snapshots = snapshots;
-        await this.loadTemplates();
-        const keys: string[] = [];
-        for (const { repository, status } of snapshots.values()) {
-          for (const change of status.changes) {
-            if (change.status !== '?' && change.status !== 'U') keys.push(changeKey(repository.id, change.path));
-          }
-        }
-        // Load the chunks of split files first, then apply everything to the latest changelist
-        // state in one synchronous step, so a change made meanwhile (say, a new active
-        // changelist) is not overwritten by a stale copy.
-        const currentHunks = new Map<string, string[]>();
-        for (const key of Object.keys(this.changelists.hunkAssignments)) {
-          const [repositoryId = '', path = ''] = key.split('\0');
-          const snapshot = snapshots.get(repositoryId);
-          if (!snapshot) continue;
-          const patch = await this.changes.getHunks(fileURLToPath(snapshot.repository.rootUri), path);
-          currentHunks.set(key, patch.hunks.map((hunk) => hunk.id));
-        }
-        let state = syncAssignments(this.changelists, keys);
-        for (const [key, ids] of currentHunks) state = pruneHunkAssignments(state, key, ids);
-        await this.saveChangelists(state);
         await this.postState();
       } while (this.refreshQueued);
     })().finally(() => {
@@ -275,74 +231,24 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
         ...(repository.operationState ? { operationState: repository.operationState } : {}),
         truncated: status.truncated,
       });
-      for (const change of status.changes) {
-        const inChangelist = change.status !== '?' && change.status !== 'U';
-        const hunkChangelists = inChangelist
-          ? this.changelists.hunkAssignments[changeKey(repository.id, change.path)]
-          : undefined;
-        changes.push({
-          ...change,
-          repositoryId: repository.id,
-          ...(inChangelist
-            ? { changelistId: changelistFor(this.changelists, changeKey(repository.id, change.path)) }
-            : {}),
-          ...(hunkChangelists ? { hunkChangelists } : {}),
-        });
-      }
+      for (const change of status.changes) changes.push({ ...change, repositoryId: repository.id });
     }
     repositories.sort((left, right) => left.root.localeCompare(right.root));
     const draft = this.context.workspaceState.get<string>(DRAFT_KEY);
-    const template = this.template();
     await this.post({
       type: 'state',
       repositories,
       changes,
-      changelists: this.changelists.lists,
-      activeChangelistId: this.changelists.activeId,
       messageHistory: this.context.globalState.get<string[]>(HISTORY_KEY, []),
       layout: { ...DEFAULT_COMMIT_VIEW_LAYOUT, ...this.context.workspaceState.get<CommitViewLayout>(LAYOUT_KEY) },
       ...(draft ? { draft } : {}),
-      ...(template ? { template } : {}),
       checks: this.checks(),
       recentAuthors: this.context.globalState.get<string[]>(AUTHORS_KEY, []),
-      messageRules: {
-        subjectLength: vscode.workspace.getConfiguration('gitLogWorkbench').get<number>('commit.subjectLength', 72),
-        bodyLineLength: vscode.workspace.getConfiguration('gitLogWorkbench').get<number>('commit.bodyLineLength', 72),
-        blankLineAfterSubject: vscode.workspace
-          .getConfiguration('gitLogWorkbench')
-          .get<boolean>('commit.blankLineAfterSubject', true),
-      },
     });
   }
 
   private checks(): CommitChecks {
     return { ...DEFAULT_COMMIT_CHECKS, ...this.context.workspaceState.get<Partial<CommitChecks>>(CHECKS_KEY) };
-  }
-
-  /** The `commit.template` of the only repository, or of the first repository that has one. */
-  private template(): string | undefined {
-    for (const snapshot of this.snapshots.values()) {
-      const template = this.templates.get(snapshot.repository.id);
-      if (template) return template;
-    }
-    return undefined;
-  }
-
-  private async loadTemplates(): Promise<void> {
-    const templates = new Map<string, string>();
-    for (const { repository } of this.snapshots.values()) {
-      const cwd = fileURLToPath(repository.rootUri);
-      try {
-        const configured = await this.runner.run(['config', '--path', '--get', 'commit.template'], { cwd, timeoutMs: 10_000 });
-        const path = configured.stdout.toString('utf8').trim();
-        if (!path) continue;
-        const text = templateText(await readFile(path.startsWith('/') ? path : join(cwd, path), 'utf8'));
-        if (text) templates.set(repository.id, text);
-      } catch {
-        // No template configured, or it cannot be read.
-      }
-    }
-    this.templates = templates;
   }
 
   private async handle(message: CommitWebviewMessage): Promise<void> {
@@ -406,76 +312,12 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
         void vscode.window.showInformationMessage('Changes shelved. Use Stashes in the Git Log to unshelve them.');
         await this.refresh();
         return;
-      case 'newChangelist': {
-        const name = await vscode.window.showInputBox({ prompt: 'New changelist name', placeHolder: 'Changelist name' });
-        if (!name) return;
-        const comment = await vscode.window.showInputBox({
-          prompt: `Description for “${name}” (optional; prefills the commit message)`,
-          placeHolder: 'Description',
-        });
-        if (comment === undefined) return;
-        const id = randomBytes(8).toString('hex');
-        let state = addChangelist(this.changelists, name, id, comment);
-        if (message.items.length) {
-          state = moveToChangelist(state, message.items.map((item) => changeKey(item.repositoryId, item.path)), id);
-        }
-        await this.saveChangelists(state);
-        await this.postState();
-        return;
-      }
-      case 'renameChangelist': {
-        const current = this.changelists.lists.find((list) => list.id === message.id);
-        if (!current) return;
-        const name = await vscode.window.showInputBox({ prompt: 'Changelist name', value: current.name });
-        if (!name) return;
-        const comment = await vscode.window.showInputBox({
-          prompt: `Description for “${name}” (optional; prefills the commit message)`,
-          value: current.comment ?? '',
-        });
-        if (comment === undefined) return;
-        await this.saveChangelists(editChangelist(this.changelists, message.id, name, comment));
-        await this.postState();
-        return;
-      }
-      case 'deleteChangelist': {
-        const current = this.changelists.lists.find((list) => list.id === message.id);
-        if (!current) return;
-        const confirmed = await vscode.window.showWarningMessage(
-          `Delete changelist “${current.name}”?`,
-          { modal: true, detail: 'Its changes move to the default changelist. Files are not modified.' },
-          'Delete',
-        );
-        if (confirmed !== 'Delete') return;
-        await this.saveChangelists(removeChangelist(this.changelists, message.id));
-        await this.postState();
-        return;
-      }
-      case 'setActiveChangelist':
-        await this.saveChangelists(setActiveChangelist(this.changelists, message.id));
-        await this.postState();
-        return;
       case 'action':
-        await this.runAction(message.action, message.items, message.preview === true, message.changelistId);
+        await this.runAction(message.action, message.items, message.preview === true);
         return;
       case 'updateChecks':
         await this.context.workspaceState.update(CHECKS_KEY, message.checks);
         return;
-      case 'moveHunks': {
-        const snapshot = this.snapshots.get(message.item.repositoryId);
-        if (!snapshot) return;
-        const listId = message.changelistId ?? (await this.pickChangelist());
-        if (!listId) return;
-        const patch = await this.changes.getHunks(fileURLToPath(snapshot.repository.rootUri), message.item.path);
-        const all = patch.hunks.map((hunk) => hunk.id);
-        if (!message.hunkIds.every((id) => all.includes(id))) {
-          throw new Error('The file changed since its chunks were listed. Try again.');
-        }
-        await this.saveChangelists(
-          moveHunksToChangelist(this.changelists, changeKey(message.item.repositoryId, message.item.path), message.hunkIds, all, listId),
-        );
-        await this.postState();
-        return;
-      }
     }
   }
 
@@ -500,10 +342,6 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
     if (message.amend && groups.length > 1) {
       throw new Error('Amend works on one repository at a time; select changes from a single repository.');
     }
-    const template = this.template();
-    if (template && message.message.trim() === template.trim()) {
-      throw new Error('Edit the commit message template before committing.');
-    }
     // Like an IDE commit, unsaved edits to the selected files are saved first so they are included.
     const selectedPaths = new Set(
       groups.flatMap(([snapshot, changes]) => changes.map((change) => realPath(this.uriFor(snapshot, change.path).fsPath))),
@@ -514,28 +352,6 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
       }
     }
     await this.context.workspaceState.update(CHECKS_KEY, message.checks);
-    const partialPaths = new Set(
-      message.items.filter((item) => item.hunks).map((item) => `${item.repositoryId}\0${item.path}`),
-    );
-    const checked: CheckedRepository[] = groups.map(([snapshot, changes]) => ({
-      root: fileURLToPath(snapshot.repository.rootUri),
-      files: changes.map((change) => ({
-        uri: this.uriFor(snapshot, change.path),
-        change,
-        partial: partialPaths.has(`${snapshot.repository.id}\0${change.path}`),
-      })),
-    }));
-    let notes: string[];
-    try {
-      notes = await this.withBusy('Running commit checks…', () => this.checksRunner.run(checked, message.checks));
-    } catch (error) {
-      if (error instanceof CommitCancelled) {
-        await this.post({ type: 'busy' });
-        await this.post({ type: 'error', message: error.message });
-        return;
-      }
-      throw error;
-    }
     if (message.author) await this.rememberAuthor(message.author);
     const committed: { repository: RepositorySummary; hash: string }[] = [];
     await this.withBusy(message.amend ? 'Amending…' : 'Committing…', async () => {
@@ -571,7 +387,7 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
       type: 'committed',
       summary: `${message.amend ? 'Amended' : 'Committed'} ${String(fileCount)} file${fileCount === 1 ? '' : 's'} (${committed
         .map((entry) => `${entry.repository.displayName}@${entry.hash}`)
-        .join(', ')})${notes.length ? `. ${notes.join(' ')}` : ''}`,
+        .join(', ')})`,
       keepMessage: false,
     });
     await this.refresh();
@@ -583,27 +399,6 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
   private async rememberAuthor(author: string): Promise<void> {
     const authors = this.context.globalState.get<string[]>(AUTHORS_KEY, []).filter((entry) => entry !== author);
     await this.context.globalState.update(AUTHORS_KEY, [author, ...authors].slice(0, 10));
-  }
-
-  private async pickChangelist(): Promise<string | undefined> {
-    const picked = await vscode.window.showQuickPick(
-      [
-        ...this.changelists.lists.map((list) => ({
-          label: list.name,
-          description: list.id === this.changelists.activeId ? 'active' : (list.comment ?? ''),
-          id: list.id,
-        })),
-        { label: '$(add) New Changelist…', description: '', id: '' },
-      ],
-      { placeHolder: 'Move to changelist' },
-    );
-    if (!picked) return undefined;
-    if (picked.id) return picked.id;
-    const name = await vscode.window.showInputBox({ prompt: 'New changelist name' });
-    if (!name) return undefined;
-    const id = randomBytes(8).toString('hex');
-    await this.saveChangelists(addChangelist(this.changelists, name, id));
-    return id;
   }
 
   /**
@@ -652,7 +447,6 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
         (await vscode.window.showInputBox({
           title: `Commit This Change (${path} ${summary})`,
           prompt: 'Commit message',
-          value: this.templates.get(repository.id) ?? '',
           validateInput: (value) => (value.trim() ? undefined : 'Enter a commit message.'),
         })) ?? '';
       if (!message) return;
@@ -699,7 +493,6 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
     action: CommitAction,
     items: readonly ChangeRef[],
     preview: boolean,
-    targetChangelistId?: string,
   ): Promise<void> {
     const groups = this.resolve(items);
     const all = groups.flatMap(([snapshot, changes]) => changes.map((change) => ({ snapshot, change })));
@@ -839,20 +632,6 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
           );
         }
         break;
-      case 'moveToChangelist': {
-        const keys = all
-          .filter(({ change }) => change.status !== '?' && change.status !== 'U')
-          .map(({ snapshot, change }) => changeKey(snapshot.repository.id, change.path));
-        if (!keys.length) return;
-        const listId =
-          targetChangelistId && this.changelists.lists.some((list) => list.id === targetChangelistId)
-            ? targetChangelistId
-            : await this.pickChangelist();
-        if (!listId) return;
-        await this.saveChangelists(moveToChangelist(this.changelists, keys, listId));
-        await this.postState();
-        return;
-      }
     }
     await this.refresh();
   }
@@ -863,11 +642,6 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
     } catch {
       await vscode.window.showTextDocument(uri, { preview: false });
     }
-  }
-
-  private async saveChangelists(state: ChangelistState): Promise<void> {
-    this.changelists = state;
-    await this.context.workspaceState.update(CHANGELIST_KEY, state);
   }
 
   private async withBusy<T>(label: string, task: () => Promise<T>): Promise<T> {

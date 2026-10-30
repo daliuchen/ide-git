@@ -1,7 +1,7 @@
 {
   "name": "git-log-plus",
   "displayName": "Git Log Plus — Commit, Log & History",
-  "description": "A full IDE-style Git workflow for VS Code and Cursor: commit tool window with changelists, commit graph log, interactive rebase, push dialog, annotate, and editable diffs.",
+  "description": "A full IDE-style Git workflow for VS Code and Cursor: commit tool window with partial commits, commit graph log, interactive rebase, push dialog, annotate, and editable diffs.",
   "version": "0.3.0",
   "publisher": "daliuchen",
   "license": "MIT",
@@ -28,7 +28,6 @@
     "commit graph",
     "history",
     "commit",
-    "changelist",
     "partial commit",
     "interactive rebase",
     "blame",
@@ -50,7 +49,6 @@
     "onCommand:gitLogWorkbench.updateProject",
     "onCommand:gitLogWorkbench.editor.toggleAnnotate",
     "onCommand:gitLogWorkbench.branches",
-    "onCommand:gitLogWorkbench.vcsOperations",
     "onCommand:gitLogWorkbench.editor.commitChange",
     "onCommand:gitLogWorkbench.editor.amendChange"
   ],
@@ -122,11 +120,6 @@
         "title": "Branches…",
         "category": "Git Log",
         "icon": "$(git-branch)"
-      },
-      {
-        "command": "gitLogWorkbench.vcsOperations",
-        "title": "VCS Operations…",
-        "category": "Git Log"
       },
       {
         "command": "gitLogWorkbench.compareWithLocal",
@@ -356,31 +349,6 @@
             "debug"
           ],
           "default": "off"
-        },
-        "gitLogWorkbench.commit.testCommand": {
-          "type": "string",
-          "default": "",
-          "scope": "resource",
-          "description": "Command run by the “Run tests” commit check, in the repository root (for example `pnpm test`)."
-        },
-        "gitLogWorkbench.commit.subjectLength": {
-          "type": "number",
-          "default": 72,
-          "minimum": 0,
-          "maximum": 500,
-          "description": "Warn when the commit subject is longer than this (0 turns the check off)."
-        },
-        "gitLogWorkbench.commit.bodyLineLength": {
-          "type": "number",
-          "default": 72,
-          "minimum": 0,
-          "maximum": 500,
-          "description": "Warn when a commit body line is longer than this (0 turns the check off)."
-        },
-        "gitLogWorkbench.commit.blankLineAfterSubject": {
-          "type": "boolean",
-          "default": true,
-          "description": "Warn when the commit subject is not followed by a blank line."
         }
       }
     },

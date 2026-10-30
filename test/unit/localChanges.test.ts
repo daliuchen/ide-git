@@ -5,17 +5,6 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 import { LocalChangesService } from '../../src/commit/LocalChangesService';
-import {
-  addChangelist,
-  changeKey,
-  changelistFor,
-  createDefaultChangelistState,
-  moveToChangelist,
-  normalizeChangelistState,
-  removeChangelist,
-  setActiveChangelist,
-  syncAssignments,
-} from '../../src/commit/changelists';
 import { parseCommitWebviewMessage } from '../../src/commit/commitProtocol';
 import { commitPathspecs, parseNumstat, parsePorcelainV2Status } from '../../src/commit/localChanges';
 import { GitRunner } from '../../src/git/GitRunner';
@@ -118,42 +107,6 @@ describe('commitPathspecs', () => {
   });
 });
 
-describe('changelists', () => {
-  it('assigns new changes to the active list and keeps them there when the active list changes', () => {
-    let state = addChangelist(createDefaultChangelistState(), 'Feature', 'feature');
-    const first = changeKey('repo', 'a.ts');
-    const second = changeKey('repo', 'b.ts');
-    state = syncAssignments(state, [first]);
-    state = setActiveChangelist(state, 'feature');
-    state = syncAssignments(state, [first, second]);
-    expect(changelistFor(state, first)).toBe('default');
-    expect(changelistFor(state, second)).toBe('feature');
-    state = syncAssignments(state, [second]);
-    expect(state.assignments).toEqual({ [second]: 'feature' });
-  });
-
-  it('moves changes and reassigns them when a list is removed', () => {
-    let state = addChangelist(createDefaultChangelistState(), 'Later', 'later');
-    state = setActiveChangelist(moveToChangelist(state, ['k'], 'later'), 'later');
-    state = removeChangelist(state, 'later');
-    expect(state.activeId).toBe('default');
-    expect(state.assignments).toEqual({ k: 'default' });
-    expect(() => removeChangelist(state, 'default')).toThrow();
-    expect(() => addChangelist(state, 'Changes', 'dup')).toThrow(/already exists/u);
-  });
-
-  it('repairs invalid persisted state', () => {
-    const state = normalizeChangelistState({
-      lists: [{ id: 'x', name: 'X' }, { id: 'x', name: 'dup' }, { id: 5 }],
-      activeId: 'missing',
-      assignments: { a: 'x', b: 'missing' },
-    });
-    expect(state.lists.map((list) => list.id)).toEqual(['default', 'x']);
-    expect(state.activeId).toBe('default');
-    expect(state.assignments).toEqual({ a: 'x' });
-  });
-});
-
 describe('parseCommitWebviewMessage', () => {
   it('accepts valid messages and rejects malformed ones', () => {
     expect(
@@ -164,10 +117,10 @@ describe('parseCommitWebviewMessage', () => {
         amend: false,
         signOff: true,
         push: false,
-        checks: { reformat: true, optimizeImports: false, analyze: false, checkTodo: true, runTests: false, runHooks: false },
+        checks: { runHooks: false },
         author: 'Someone <someone@example.com>',
       }),
-    ).toMatchObject({ type: 'commit', signOff: true, checks: { reformat: true, runHooks: false }, author: 'Someone <someone@example.com>' });
+    ).toMatchObject({ type: 'commit', signOff: true, checks: { runHooks: false }, author: 'Someone <someone@example.com>' });
     expect(
       parseCommitWebviewMessage({ type: 'commit', message: 'x', items: [], amend: false, signOff: false, push: false }),
     ).toBeUndefined();
@@ -179,7 +132,7 @@ describe('parseCommitWebviewMessage', () => {
         amend: false,
         signOff: false,
         push: false,
-        checks: { reformat: false, optimizeImports: false, analyze: false, checkTodo: false, runTests: false, runHooks: true },
+        checks: { runHooks: true },
       }),
     ).toBeUndefined();
     expect(parseCommitWebviewMessage({ type: 'action', action: 'rm -rf', items: [] })).toBeUndefined();
@@ -419,46 +372,5 @@ describe('line-level commits, author, and hooks', () => {
     await service.commit(repository, { ...request, noVerify: true });
     expect(await git(repository, 'log', '-1', '--format=%an <%ae>|%cn')).toBe('Other Person <other@example.com>|Tester');
     await expect(service.commit(repository, { ...request, author: 'no email' })).rejects.toThrow(/Name <email/u);
-  });
-});
-
-describe('chunk changelists', () => {
-  it('splits a file across changelists and merges it back when all chunks agree', async () => {
-    const { moveHunksToChangelist, pruneHunkAssignments } = await import('../../src/commit/changelists');
-    let state = addChangelist(createDefaultChangelistState(), 'Later', 'later');
-    const key = changeKey('r', 'a.ts');
-    state = syncAssignments(state, [key]);
-    state = moveHunksToChangelist(state, key, ['h2'], ['h1', 'h2', 'h3'], 'later');
-    expect(state.hunkAssignments[key]).toEqual({ h2: 'later' });
-    expect(changelistFor(state, key)).toBe('default');
-    state = pruneHunkAssignments(state, key, ['h1', 'h3']);
-    expect(state.hunkAssignments[key]).toBeUndefined();
-    state = moveHunksToChangelist(state, key, ['h1', 'h3'], ['h1', 'h3'], 'later');
-    expect(changelistFor(state, key)).toBe('later');
-    expect(state.hunkAssignments[key]).toBeUndefined();
-    expect(normalizeChangelistState({ ...state, hunkAssignments: { [key]: { h1: 'missing', h2: 'later' } } }).hunkAssignments).toEqual({
-      [key]: { h2: 'later' },
-    });
-  });
-});
-
-describe('commit message helpers', () => {
-  it('checks and wraps commit messages', async () => {
-    const { checkCommitMessage, wrapCommitMessage, findAddedTodos, templateText } = await import('../../src/commit/commitMessage');
-    const rules = { subjectLength: 20, bodyLineLength: 30, blankLineAfterSubject: true };
-    const message = 'A subject that is far too long\nbody starts right away and keeps going for quite a while';
-    expect(checkCommitMessage(message, rules).map((issue) => issue.line)).toEqual([1, 2, 2]);
-    const wrapped = wrapCommitMessage(message, 30);
-    expect(wrapped.split('\n')[1]).toBe('');
-    expect(checkCommitMessage(wrapped, { ...rules, subjectLength: 0 })).toEqual([]);
-    expect(wrapCommitMessage('Subject\n\n- list item that is long enough to wrap but stays', 20)).toBe(
-      'Subject\n\n- list item that is long enough to wrap but stays',
-    );
-    expect(templateText('# comment\nfeat: \n\n# more\nBody\n')).toBe('feat: \n\nBody');
-    const patch = ['+++ b/src/a.ts', '@@ -1,0 +5,2 @@', '+const x = 1; // TODO remove', '+ok', '@@ -9 +11 @@', '-old', '+// FIXME later', ''].join('\n');
-    expect(findAddedTodos(patch)).toEqual([
-      { path: 'src/a.ts', line: 5, text: 'const x = 1; // TODO remove' },
-      { path: 'src/a.ts', line: 11, text: '// FIXME later' },
-    ]);
   });
 });

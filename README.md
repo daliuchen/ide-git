@@ -4,7 +4,7 @@
 
 [![Open VSX Version](https://img.shields.io/open-vsx/v/daliuchen/git-log-plus?label=Open%20VSX)](https://open-vsx.org/extension/daliuchen/git-log-plus)
 
-An IDE-style Git workflow for **Cursor** and **VS Code**: a real Commit tool window with changelists and partial commits, a commit graph Log, interactive rebase, a Push dialog, Annotate, and diffs you can actually edit with full language support.
+An IDE-style Git workflow for **Cursor** and **VS Code**: a real Commit tool window with partial commits, a commit graph Log, interactive rebase, a Push dialog, Annotate, and diffs you can actually edit with full language support.
 
 Built on [ascenx/vscode-git-log](https://github.com/ascenx/vscode-git-log) (MIT). Every feature of the original Git Log is kept; see [Git Log (original features)](#git-log-original-features).
 
@@ -15,7 +15,6 @@ Built on [ascenx/vscode-git-log](https://github.com/ascenx/vscode-git-log) (MIT)
 The built-in Source Control view is fine for `git add` + `git commit`, but it falls short once you work the way a full IDE lets you:
 
 - Commit **part of a file** — single chunks or single lines — without touching the staging area.
-- Keep unrelated work apart in **changelists** and commit them separately.
 - Review changes in a diff whose right side is **the real file**, so go to definition, rename and diagnostics keep working.
 - Rebase, reword, squash, undo and push from menus and dialogs instead of the terminal.
 
@@ -45,7 +44,7 @@ Tip: drag the Commit view to the secondary side bar to keep it open next to the 
 
 ### 2. Commit
 
-1. Check the files (or folders, or a whole changelist) you want to commit. New changes are checked by default.
+1. Check the files (or folders) you want to commit. New changes are checked by default.
 2. Double-click a file (or press `Cmd/Ctrl+D`) to review its diff. The right side is the real file — fix things right there.
 3. Type a message and press `Cmd/Ctrl+Enter` to commit, or `Cmd/Ctrl+Alt+Enter` for **Commit and Push…**.
 
@@ -69,7 +68,6 @@ Open the **Git Log** tab in the bottom panel (`Git Log: Open Log`). Right-click 
 | --- | --- |
 | Commit a few files | Check them in the Commit window → message → `Cmd/Ctrl+Enter` |
 | Commit some chunks / lines of a file | Expand the file (and the chunk) in the Commit window, check only what you want |
-| Keep two pieces of work apart | Toolbar **New Changelist…**, then drag files (or right-click a chunk → *Move to Another Changelist…*) onto it. Commit each changelist on its own |
 | Fix the last commit | Check **Amend** (the last message is loaded) → commit. Or in the editor: right-click → *Git Log → Amend This Change into Last Commit* |
 | Commit just the change under the cursor | Editor right-click → *Git Log → Commit This Change…* |
 | Undo the last commit but keep the changes | Log → right-click the commit → **Undo Commit** (the message goes back to the Commit window) |
@@ -91,16 +89,12 @@ Open the **Git Log** tab in the bottom panel (`Git Log: Open Log`). Right-click 
 
 ### Commit tool window
 
-- Changes as a **directory tree** (single-child folders merged, e.g. `src/commit`) or a flat list; grouped by changelist and, with several repositories, by repository. Merge conflicts and unversioned files have their own groups.
-- **Tri-state checkboxes** on changelists, folders, files, chunks and lines.
-- **Changelists**: create, rename, delete, set active, add a description (it prefills the commit message), move files or individual chunks between them (a split file shows in each), drag & drop. New changes land in the active changelist.
-- Commit message with **history**, **Amend**, **Sign-off**, drafts kept per workspace, `commit.template` support, and message checks (subject length, body line length, blank line after the subject) with one-click wrapping.
-- **Commit options** (gear button): Author, Run Git hooks, and checks before commit — Reformat code, Optimize imports, Analyze code (stops on errors/warnings so you can review or commit anyway), Check TODO, Run tests (`gitLogWorkbench.commit.testCommand`).
-- Context menu: Show Diff (`Cmd/Ctrl+D`), Jump to Source (F4), Commit File…, Rollback… (`Cmd/Ctrl+Alt+Z`), Move to Another Changelist… (`Alt+Shift+M`), New Changelist…, Shelve Changes…, Add to VCS, Add to .gitignore, Delete, Show History, Copy Path; for conflicts Merge…, Accept Yours, Accept Theirs, Mark as Resolved.
+- Changes as a **directory tree** (single-child folders merged, e.g. `src/commit`) or a flat list; grouped by repository when there are several. Merge conflicts and unversioned files have their own groups.
+- **Tri-state checkboxes** on groups, folders, files, chunks and lines.
+- Commit message with **history**, **Amend**, **Sign-off**, drafts kept per workspace.
+- **Commit options** (gear button): Author and Run Git hooks (clear to commit with `--no-verify`).
+- Context menu: Show Diff (`Cmd/Ctrl+D`), Jump to Source (F4), Commit File…, Rollback… (`Cmd/Ctrl+Alt+Z`), Shelve Changes…, Add to VCS, Add to .gitignore, Delete, Show History, Copy Path; for conflicts Merge…, Accept Yours, Accept Theirs, Mark as Resolved.
 
-![Chunks split across changelists](images/n9-split-chunks.jpg)
-
-![Commit message checks](images/n2-message-checks.jpg)
 
 ### Editable diffs with language features
 
@@ -123,7 +117,7 @@ Open the **Git Log** tab in the bottom panel (`Git Log: Open Log`). Right-click 
 - **Interactive rebase**: pick / reword / edit / squash / fixup / drop, reorder with `Alt+↑/↓`, keys P/R/E/S/F/D, combined message editor for squash groups. Local changes are auto-stashed.
 - **Push**: outgoing commits and their files, editable remote and target branch (*New* when it does not exist yet), Set upstream, Push tags, Force push with lease. A rejected push offers Rebase and Push / Merge and Push.
 - **Branches** popup (`Git Log: Branches…`): Checkout, New Branch from…, Checkout and Rebase, Rebase, Merge, Update, Push, Rename, Delete, Pull Using Rebase/Merge.
-- `Git Log: VCS Operations…`, `Git Log: Update Project…`, `Git Log: Push…`.
+- `Git Log: Update Project…`, `Git Log: Push…`.
 
 ![Interactive rebase dialog](images/c18-rebase-dialog.jpg)
 
@@ -146,7 +140,6 @@ Editor (or line-number) right-click → *Git Log → Annotate with Git Blame*: a
 | `Git Log: Branches…` | Branch popup |
 | `Git Log: Push…` | Push dialog |
 | `Git Log: Update Project…` | `git pull --rebase` or `--no-rebase`, with autostash |
-| `Git Log: VCS Operations…` | Quick menu of the above |
 
 ## Keyboard shortcuts
 
@@ -156,7 +149,6 @@ Editor (or line-number) right-click → *Git Log → Annotate with Git Blame*: a
 | `Cmd/Ctrl+Alt+Enter` | Commit message | Commit and Push… |
 | `Cmd/Ctrl+D` | Commit window | Show Diff |
 | `Cmd/Ctrl+Alt+Z` | Commit window | Rollback… |
-| `Alt+Shift+M` | Commit window | Move to Another Changelist… |
 | `F4` | Read-only diff / Commit window | Jump to Source |
 | `P R E S F D`, `Alt+↑/↓` | Rebase dialog | Change action, reorder |
 
@@ -166,8 +158,7 @@ Optional global shortcuts (not bound by default because they collide with editor
 [
   { "key": "cmd+k cmd+c", "command": "gitLogWorkbench.commit.open" },
   { "key": "cmd+shift+k", "command": "gitLogWorkbench.push", "when": "!editorTextFocus" },
-  { "key": "cmd+t", "command": "gitLogWorkbench.updateProject", "when": "!editorTextFocus" },
-  { "key": "ctrl+v", "command": "gitLogWorkbench.vcsOperations", "when": "!editorTextFocus" }
+  { "key": "cmd+t", "command": "gitLogWorkbench.updateProject", "when": "!editorTextFocus" }
 ]
 ```
 
@@ -175,10 +166,6 @@ Optional global shortcuts (not bound by default because they collide with editor
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `gitLogWorkbench.commit.testCommand` | `""` | Command for the *Run tests* check, run in the repository root (e.g. `pnpm test`) |
-| `gitLogWorkbench.commit.subjectLength` | `72` | Warn when the subject is longer (0 = off) |
-| `gitLogWorkbench.commit.bodyLineLength` | `72` | Warn when a body line is longer (0 = off) |
-| `gitLogWorkbench.commit.blankLineAfterSubject` | `true` | Warn when the subject is not followed by a blank line |
 | `gitLogWorkbench.git.path` | `"git"` | Git executable |
 | `gitLogWorkbench.currentLineBlame.enabled` | `true` | Current-line blame after the cursor line |
 
@@ -298,7 +285,6 @@ Build a local VSIX with:
 ```text
 pnpm run package
 ```
-
 
 ## Usage tips
 

@@ -97,7 +97,7 @@ describe('extension contributions', () => {
     };
     expect(packageJson.displayName).toBe('Git Log Plus — Commit, Log & History');
     expect(packageJson.description).toBe(
-      'A full IDE-style Git workflow for VS Code and Cursor: commit tool window with changelists, commit graph log, interactive rebase, push dialog, annotate, and editable diffs.',
+      'A full IDE-style Git workflow for VS Code and Cursor: commit tool window with partial commits, commit graph log, interactive rebase, push dialog, annotate, and editable diffs.',
     );
 
     const files = [
