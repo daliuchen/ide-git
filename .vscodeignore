@@ -12,3 +12,5 @@ dist-test/**
 tsconfig.json
 vitest.config.mts
 eslint.config.mjs
+pnpm-lock.yaml
+.tool-versions

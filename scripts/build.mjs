@@ -45,6 +45,22 @@ const builds = [
   },
   {
     ...shared,
+    entryPoints: { commit: 'webview/src/commit/index.tsx', dialog: 'webview/src/dialog/index.tsx' },
+    outdir: 'dist',
+    platform: 'browser',
+    format: 'iife',
+    target: ['es2022'],
+    minify: production,
+    define: {
+      'process.env.NODE_ENV': JSON.stringify(production ? 'production' : 'development'),
+    },
+    loader: {
+      '.ttf': 'file',
+    },
+    assetNames: '[name]-[hash]',
+  },
+  {
+    ...shared,
     entryPoints: ['test/integration/index.ts'],
     outfile: 'dist-test/integration.js',
     platform: 'node',

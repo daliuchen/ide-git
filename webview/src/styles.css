@@ -971,6 +971,12 @@ select:focus-visible,
   color: var(--vscode-disabledForeground);
 }
 
+.context-menu-separator {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--vscode-menu-separatorBackground, var(--vscode-widget-border));
+}
+
 .operation-dialog-backdrop {
   position: fixed;
   z-index: 50;

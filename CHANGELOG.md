@@ -2,6 +2,34 @@
 
 All notable changes to Git Log are documented in this file.
 
+## 0.3.0
+
+- Line-level partial commits: expand a chunk and choose individual added or removed lines.
+- Chunk-level changelists: move a chunk to another changelist; a split file appears in each one.
+- Drag files onto a changelist; changelist descriptions prefill the commit message.
+- Commit options: author, Run Git hooks, and checks before commit (reformat code, optimize imports, analyze code, check TODO, run tests).
+- `commit.template` support and commit message checks with one-click wrapping.
+- Rollback can delete the local copies of added files.
+- Commit This Change / Amend This Change from the editor for the change at the cursor.
+- Push dialog: a rejected push offers Rebase and Push or Merge and Push.
+- Log: Drop Selected Changes removes a file's change from a commit.
+- Fixed: switching the active changelist could be undone by a concurrent refresh; paths behind symlinks are matched correctly.
+
+## 0.2.1
+
+- Commit view saves unsaved editors of the selected files before committing, so their edits are included.
+- Shelve records only the selected files; other staged changes are no longer captured in the stash.
+- The commit summary counts only the selected chunks of partially committed files.
+
+## 0.2.0 — Git Log Plus
+
+First release of the fork (`daliuchen.git-log-plus`).
+
+- Commit tool window: directory tree of local changes, changelists, tri-state checkboxes, partial (chunk) commits, amend, sign-off, message history, Commit and Push, rollback, shelve, conflict actions.
+- Editable diffs: the working-tree file is used whenever it matches, Jump to Source (F4) from any revision, Compare with Local for files, commits, and branches.
+- Log: Edit Commit Message, Fixup / Squash Into, Undo Commit, Interactively Rebase from Here, Push All up to Here, Create Patch, file-level Revert / Cherry-Pick Selected Changes and Get from Revision, Checkout and Rebase onto Current, Pull into Current, Update branch, Update Project.
+- Push dialog, interactive rebase dialog, Branches popup, VCS Operations menu, Annotate with Git Blame.
+
 ## 0.1.3
 
 ### Added

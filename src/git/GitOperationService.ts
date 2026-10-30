@@ -1,6 +1,8 @@
 import { fileURLToPath } from 'node:url';
 import { normalize } from 'node:path';
-import type { GitOperationRequest } from '../protocol/messages';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import type { GitOperationRequest, RebaseStep } from '../protocol/messages';
 import type { RepositorySummary } from '../shared/models';
 import { inspectRepository } from '../repositories/discoverRepositories';
 import { GitCommandError, type GitRunner } from './GitRunner';
@@ -16,6 +18,8 @@ export interface GitOperationRunOptions {
 
 export interface GitOperationServiceOptions {
   inspectRepository?(repository: RepositorySummary): Promise<RepositorySummary | undefined>;
+  /** Called after Undo Commit with the undone commit's message, so it can be committed again. */
+  onCommitUndone?(repository: RepositorySummary, message: string): void;
 }
 
 export interface OperationConfirmation {
@@ -182,7 +186,120 @@ export function buildOperationArguments(
     case 'dropCommits':
     case 'squashCommits':
       throw new Error(`${operation.kind} requires a validated history rewrite plan.`);
+    case 'pullFrom':
+      return [
+        'pull',
+        operation.rebase ? '--rebase' : '--no-rebase',
+        '--autostash',
+        validateToken(operation.remote, 'remote'),
+        validateToken(operation.branch, 'remote branch'),
+      ];
+    case 'updateBranch':
+      return [
+        'fetch',
+        validateToken(operation.remote, 'remote'),
+        `refs/heads/${validateToken(operation.remoteBranch, 'remote branch')}:refs/heads/${validateToken(operation.localBranch, 'branch name')}`,
+      ];
+    case 'updateProject':
+      return ['pull', '--autostash', operation.rebase ? '--rebase' : '--no-rebase'];
+    case 'pushTo':
+      return [
+        'push',
+        ...(operation.setUpstream && operation.source === 'HEAD' ? ['--set-upstream'] : []),
+        ...(operation.forceWithLease ? ['--force-with-lease'] : []),
+        ...(operation.pushTags ? ['--follow-tags'] : []),
+        validateToken(operation.remote, 'push remote'),
+        `${operation.source === 'HEAD' ? 'HEAD' : validateHash(operation.source)}:refs/heads/${validateToken(operation.branch, 'push branch')}`,
+      ];
+    case 'rewordCommit':
+    case 'undoCommit':
+    case 'interactiveRebase':
+    case 'checkoutAndRebase':
+    case 'applyFileChanges':
+    case 'getFromRevision':
+    case 'dropFileChanges':
+      throw new Error(`${operation.kind} requires repository inspection before execution.`);
   }
+}
+
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+
+/** Quotes a value for the POSIX shell that runs `exec` lines of a rebase todo list. */
+export function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+/** Builds a `git rebase -i` todo list; reword and squash messages are applied by `exec` amend lines. */
+export function buildRebaseTodo(
+  steps: readonly RebaseStep[],
+  messageFile: (index: number) => string,
+): string {
+  if (!steps.length) throw new Error('The rebase has no commits.');
+  if (steps.every((step) => step.action === 'drop')) {
+    throw new Error('Keep at least one commit, or use Reset to remove all of them.');
+  }
+  const first = steps.find((step) => step.action !== 'drop');
+  if (first && (first.action === 'squash' || first.action === 'fixup')) {
+    throw new Error('The first kept commit cannot be squashed or fixed up into a previous commit.');
+  }
+  const quote = shellQuote;
+  const lines: string[] = [];
+  let pendingMessage: { index: number; message: string } | undefined;
+  const flush = (): void => {
+    if (!pendingMessage) return;
+    lines.push(
+      `exec git commit --amend --only --no-verify --allow-empty -F ${quote(messageFile(pendingMessage.index))}`,
+    );
+    pendingMessage = undefined;
+  };
+  steps.forEach((step, index) => {
+    const hash = validateHash(step.hash);
+    if (step.action === 'squash' || step.action === 'fixup') {
+      lines.push(`fixup ${hash}`);
+      if (step.action === 'squash' && !pendingMessage) {
+        throw new Error('A squashed commit needs a message on the commit it is squashed into.');
+      }
+      return;
+    }
+    flush();
+    if (step.action === 'drop') {
+      lines.push(`drop ${hash}`);
+      return;
+    }
+    lines.push(`${step.action === 'edit' ? 'edit' : 'pick'} ${hash}`);
+    if (step.message !== undefined) {
+      validateCommitMessage(step.message, 'commit message');
+      pendingMessage = { index, message: step.message };
+    }
+  });
+  flush();
+  return `${lines.join('\n')}\n`;
+}
+
+interface RawCommit {
+  tree: string;
+  parents: string[];
+  author: { name: string; email: string; date: string };
+  message: string;
+}
+
+function parseRawCommit(raw: string): RawCommit {
+  const separator = raw.indexOf('\n\n');
+  const headers = (separator >= 0 ? raw.slice(0, separator) : raw).split('\n');
+  const message = separator >= 0 ? raw.slice(separator + 2) : '';
+  let tree = '';
+  const parents: string[] = [];
+  let author: RawCommit['author'] | undefined;
+  for (const header of headers) {
+    if (header.startsWith('tree ')) tree = header.slice(5);
+    else if (header.startsWith('parent ')) parents.push(header.slice(7));
+    else if (header.startsWith('author ')) {
+      const match = /^author (.*) <(.*)> (\d+ [+-]\d{4})$/u.exec(header);
+      if (match) author = { name: match[1] ?? '', email: match[2] ?? '', date: `@${match[3] ?? ''}` };
+    }
+  }
+  if (!tree || !author) throw new Error('Unable to read commit metadata.');
+  return { tree: validateHash(tree), parents: parents.map(validateHash), author, message };
 }
 
 export function getOperationConfirmation(
@@ -269,6 +386,30 @@ export function getOperationConfirmation(
       destructive: true,
     };
   }
+  if (operation.kind === 'pushTo' && operation.forceWithLease) {
+    return {
+      title: 'Force push with lease?',
+      detail: `Repository “${repository.displayName}” will overwrite ${operation.remote}/${operation.branch} if its lease still matches.`,
+      confirmLabel: 'Force Push with Lease',
+      destructive: true,
+    };
+  }
+  if (operation.kind === 'dropFileChanges') {
+    return {
+      title: `Drop the changes to ${String(operation.paths.length)} file${operation.paths.length === 1 ? '' : 's'} from commit ${operation.hash.slice(0, 8)}?`,
+      detail: `${operation.paths.slice(0, 10).join('\n')}${operation.paths.length > 10 ? '\n…' : ''}\n\nThe commit and every newer commit on the current branch are rewritten. Local changes are stashed and restored.`,
+      confirmLabel: 'Drop Changes',
+      destructive: true,
+    };
+  }
+  if (operation.kind === 'getFromRevision') {
+    return {
+      title: `Replace ${String(operation.paths.length)} local file${operation.paths.length === 1 ? '' : 's'} with revision ${operation.hash.slice(0, 8)}?`,
+      detail: `${operation.paths.slice(0, 10).join('\n')}${operation.paths.length > 10 ? '\n…' : ''}\n\nLocal changes to these files will be lost.`,
+      confirmLabel: 'Get from Revision',
+      destructive: true,
+    };
+  }
   if (operation.kind === 'amendCommit') {
     return {
       title: 'Amend the current HEAD commit?',
@@ -295,10 +436,13 @@ export class GitOperationService {
     repository: RepositorySummary,
   ) => Promise<RepositorySummary | undefined>;
 
+  private readonly onCommitUndone: GitOperationServiceOptions['onCommitUndone'];
+
   constructor(
     private readonly runner: GitRunner,
     options: GitOperationServiceOptions = {},
   ) {
+    this.onCommitUndone = options.onCommitUndone;
     this.inspect =
       options.inspectRepository ??
       ((repository) => inspectRepository(fileURLToPath(repository.rootUri), this.runner));
@@ -515,6 +659,26 @@ export class GitOperationService {
             preparedOperation.message,
           );
           await this.rebaseCommitRange(rewritePlan, squashedHash);
+        } else if (preparedOperation.kind === 'rewordCommit') {
+          await this.rewordCommit(freshRepository, preparedOperation.hash, preparedOperation.message);
+        } else if (preparedOperation.kind === 'undoCommit') {
+          await this.undoCommit(freshRepository, preparedOperation.hash);
+        } else if (preparedOperation.kind === 'interactiveRebase') {
+          await this.interactiveRebase(freshRepository, preparedOperation.base, preparedOperation.steps);
+        } else if (preparedOperation.kind === 'checkoutAndRebase') {
+          const cwd = fileURLToPath(freshRepository.rootUri);
+          const current = await this.runner.run(['branch', '--show-current'], { cwd, timeoutMs: 30_000 });
+          const onto = current.stdout.toString('utf8').trim() || (await this.revParse(cwd, 'HEAD'));
+          await this.runner.run(
+            ['rebase', validateToken(onto, 'rebase target'), validateToken(preparedOperation.branch, 'branch name')],
+            { cwd, timeoutMs: 10 * 60_000, env: { GIT_EDITOR: 'true' } },
+          );
+        } else if (preparedOperation.kind === 'applyFileChanges') {
+          await this.applyFileChanges(freshRepository, preparedOperation);
+        } else if (preparedOperation.kind === 'dropFileChanges') {
+          await this.dropFileChanges(freshRepository, preparedOperation.hash, preparedOperation.paths);
+        } else if (preparedOperation.kind === 'getFromRevision') {
+          await this.getFromRevision(freshRepository, preparedOperation.hash, preparedOperation.paths);
         } else {
           await this.runner.run(buildOperationArguments(preparedOperation, forceSourceHash), {
             cwd: fileURLToPath(freshRepository.rootUri),
@@ -535,6 +699,259 @@ export class GitOperationService {
       if (this.queues.get(queueKey) === tail) this.queues.delete(queueKey);
     });
     return execution;
+  }
+
+  private async revParse(cwd: string, revision: string): Promise<string> {
+    const result = await this.runner.run(['rev-parse', '--verify', `${revision}^{commit}`], {
+      cwd,
+      timeoutMs: 30_000,
+    });
+    return validateHash(result.stdout.toString('utf8').trim());
+  }
+
+  private async readCommit(cwd: string, hash: string): Promise<RawCommit> {
+    const result = await this.runner.run(['cat-file', 'commit', validateHash(hash)], { cwd, timeoutMs: 30_000 });
+    return parseRawCommit(result.stdout.toString('utf8'));
+  }
+
+  /**
+   * Returns the first-parent commits from `hash` (inclusive) to HEAD, oldest first, rejecting
+   * merges because their history cannot be replayed linearly.
+   */
+  async listLinearCommitsToHead(
+    cwd: string,
+    hash: string,
+  ): Promise<{ hashes: string[]; base?: string; head: string; branch?: string }> {
+    const target = await this.revParse(cwd, hash);
+    const head = await this.revParse(cwd, 'HEAD');
+    const history = await this.runner.run(['rev-list', '--first-parent', '--parents', 'HEAD'], {
+      cwd,
+      timeoutMs: 60_000,
+    });
+    const lines = history.stdout.toString('utf8').trim().split(/\r?\n/u).filter(Boolean).map((line) => line.split(' '));
+    const index = lines.findIndex(([candidate]) => candidate === target);
+    if (index < 0) throw new Error('The selected commit is not in the current branch’s first-parent history.');
+    if (index >= 500) throw new Error('Select a commit among the 500 most recent commits of the current branch.');
+    const range = lines.slice(0, index + 1);
+    if (range.some((line) => line.length > 2)) {
+      throw new Error('Rewriting history across merge commits is not supported; choose a commit after the latest merge.');
+    }
+    const branchResult = await this.runner.run(['branch', '--show-current'], { cwd, timeoutMs: 30_000 });
+    const branch = branchResult.stdout.toString('utf8').trim();
+    const base = range.at(-1)?.[1];
+    return {
+      hashes: range.map(([candidate]) => candidate ?? '').reverse(),
+      ...(base ? { base } : {}),
+      head,
+      ...(branch ? { branch } : {}),
+    };
+  }
+
+  private async rewordCommit(repository: RepositorySummary, hash: string, message: string): Promise<void> {
+    const cwd = fileURLToPath(repository.rootUri);
+    const text = validateCommitMessage(message, 'commit message');
+    const plan = await this.listLinearCommitsToHead(cwd, hash);
+    const input = text.endsWith('\n') ? text : `${text}\n`;
+    if (plan.hashes.length === 1) {
+      // Rewording HEAD: amend only the message, leaving staged changes alone.
+      await this.runner.run(['commit', '--amend', '--only', '--allow-empty', '--no-verify', '-F', '-'], {
+        cwd,
+        timeoutMs: 60_000,
+        input,
+      });
+      return;
+    }
+    // Recreate the commits with identical trees, so the index and working tree stay untouched.
+    let parent = plan.base;
+    for (const [index, current] of plan.hashes.entries()) {
+      const commit = await this.readCommit(cwd, current);
+      const created = await this.runner.run(
+        ['commit-tree', commit.tree, ...(parent ? ['-p', parent] : [])],
+        {
+          cwd,
+          timeoutMs: 30_000,
+          input: index === 0 ? input : commit.message,
+          env: {
+            GIT_AUTHOR_NAME: commit.author.name,
+            GIT_AUTHOR_EMAIL: commit.author.email,
+            GIT_AUTHOR_DATE: commit.author.date,
+          },
+        },
+      );
+      parent = validateHash(created.stdout.toString('utf8').trim());
+    }
+    if (!parent) throw new Error('Unable to rewrite the commit message.');
+    await this.runner.run(
+      plan.branch
+        ? ['update-ref', '-m', 'git-log: reword', `refs/heads/${plan.branch}`, parent, plan.head]
+        : ['update-ref', '--no-deref', '-m', 'git-log: reword', 'HEAD', parent, plan.head],
+      { cwd, timeoutMs: 30_000 },
+    );
+  }
+
+  private async undoCommit(repository: RepositorySummary, hash: string): Promise<void> {
+    const cwd = fileURLToPath(repository.rootUri);
+    const head = await this.revParse(cwd, 'HEAD');
+    if (head !== (await this.revParse(cwd, hash))) throw new Error('Only the current HEAD commit can be undone.');
+    const commit = await this.readCommit(cwd, head);
+    if (commit.parents.length !== 1) {
+      throw new Error(commit.parents.length ? 'A merge commit cannot be undone this way.' : 'The root commit cannot be undone.');
+    }
+    await this.runner.run(['reset', '--soft', commit.parents[0] ?? '', '--'], { cwd, timeoutMs: 60_000 });
+    this.onCommitUndone?.(repository, commit.message.replace(/\s+$/u, ''));
+  }
+
+  private async interactiveRebase(
+    repository: RepositorySummary,
+    base: string | undefined,
+    steps: readonly RebaseStep[],
+  ): Promise<void> {
+    const cwd = fileURLToPath(repository.rootUri);
+    // The steps must be exactly the linear first-parent commits after `base`, in any order.
+    const expected = await this.listCommitsAfter(cwd, base);
+    const oldest = expected[0];
+    if (!oldest) throw new Error('There are no commits to rebase.');
+    const plan = await this.listLinearCommitsToHead(cwd, oldest);
+    if ((plan.base ?? '') !== (base ?? '')) throw new Error('The rebase base is not the parent of the oldest commit.');
+    const resolved = await Promise.all(steps.map((step) => this.revParse(cwd, step.hash)));
+    if (expected.length !== resolved.length || [...expected].sort().join() !== [...resolved].sort().join()) {
+      throw new Error('The branch changed since the rebase plan was prepared; reopen the dialog.');
+    }
+    const directory = join(fileURLToPath(repository.gitDirUri), 'git-log-rebase');
+    await rm(directory, { recursive: true, force: true });
+    await mkdir(directory, { recursive: true });
+    const messageFile = (index: number): string => join(directory, `message-${String(index)}.txt`);
+    const todo = buildRebaseTodo(
+      steps.map((step, index) => ({ ...step, hash: resolved[index] ?? step.hash })),
+      messageFile,
+    );
+    await Promise.all(
+      steps.map((step, index) =>
+        step.message === undefined ? Promise.resolve() : writeFile(messageFile(index), step.message, 'utf8'),
+      ),
+    );
+    const todoFile = join(directory, 'todo.txt');
+    await writeFile(todoFile, todo, 'utf8');
+    await this.runner.run(
+      [
+        '-c',
+        'rebase.updateRefs=false',
+        '-c',
+        'rebase.instructionFormat=%s',
+        'rebase',
+        '-i',
+        '--autostash',
+        '--no-autosquash',
+        ...(base ? [validateHash(base)] : ['--root']),
+      ],
+      {
+        cwd,
+        timeoutMs: 10 * 60_000,
+        env: {
+          GIT_SEQUENCE_EDITOR: `cp '${todoFile.replaceAll("'", "'\\''")}'`,
+          GIT_EDITOR: 'true',
+        },
+      },
+    );
+  }
+
+  /** Removes the selected files' changes from one commit and replays the newer commits on top. */
+  private async dropFileChanges(repository: RepositorySummary, hash: string, paths: readonly string[]): Promise<void> {
+    const cwd = fileURLToPath(repository.rootUri);
+    const plan = await this.listLinearCommitsToHead(cwd, hash);
+    const [target] = plan.hashes;
+    if (!target || !plan.base) throw new Error('Changes cannot be dropped from the root commit.');
+    const base = plan.base;
+    const restore: string[] = [];
+    for (const path of paths) {
+      try {
+        await this.runner.run(['cat-file', '-e', `${base}:${path}`], { cwd, timeoutMs: 30_000 });
+        restore.push(`git checkout ${base} -- ${shellQuote(path)}`);
+      } catch (error) {
+        if (!(error instanceof GitCommandError) || error.cancelled) throw error;
+        // The file did not exist before this commit, so dropping its change removes it.
+        restore.push(`git rm -q -f --ignore-unmatch -- ${shellQuote(path)}`);
+      }
+    }
+    // One exec line: Git stops the rebase when an exec step leaves the index dirty.
+    const amend = `exec ${[...restore, 'git commit --amend --no-edit --allow-empty --no-verify'].join(' && ')}`;
+    const lines = plan.hashes.flatMap((commit) => (commit === target ? [`pick ${commit}`, amend] : [`pick ${commit}`]));
+    const directory = join(fileURLToPath(repository.gitDirUri), 'git-log-rebase');
+    await rm(directory, { recursive: true, force: true });
+    await mkdir(directory, { recursive: true });
+    const todoFile = join(directory, 'todo.txt');
+    await writeFile(todoFile, `${lines.join('\n')}\n`, 'utf8');
+    await this.runner.run(
+      ['-c', 'rebase.updateRefs=false', 'rebase', '-i', '--autostash', '--no-autosquash', validateHash(base)],
+      {
+        cwd,
+        timeoutMs: 10 * 60_000,
+        env: {
+          GIT_SEQUENCE_EDITOR: `cp ${shellQuote(todoFile)}`,
+          GIT_EDITOR: 'true',
+          GIT_LITERAL_PATHSPECS: '1',
+        },
+      },
+    );
+  }
+
+  private async listCommitsAfter(cwd: string, base: string | undefined): Promise<string[]> {
+    const result = await this.runner.run(
+      ['rev-list', '--first-parent', '--reverse', base ? `${validateHash(base)}..HEAD` : 'HEAD'],
+      { cwd, timeoutMs: 60_000 },
+    );
+    return result.stdout.toString('utf8').trim().split(/\r?\n/u).filter(Boolean);
+  }
+
+  private async applyFileChanges(
+    repository: RepositorySummary,
+    operation: Extract<GitOperationRequest, { kind: 'applyFileChanges' }>,
+  ): Promise<void> {
+    const cwd = fileURLToPath(repository.rootUri);
+    const hash = validateHash(operation.hash);
+    const commit = await this.readCommit(cwd, hash);
+    const parent = operation.parent ? validateHash(operation.parent) : (commit.parents[0] ?? EMPTY_TREE);
+    const patch = await this.runner.run(
+      ['diff', '--binary', '--no-color', '--no-ext-diff', parent, hash, '--', ...operation.paths],
+      { cwd, timeoutMs: 60_000, env: { GIT_LITERAL_PATHSPECS: '1' } },
+    );
+    if (!patch.stdout.length) throw new Error('The selected files have no changes in this commit.');
+    await this.runner.run(['apply', '--3way', ...(operation.reverse ? ['--reverse'] : []), '-'], {
+      cwd,
+      timeoutMs: 60_000,
+      input: patch.stdout,
+    });
+  }
+
+  private async getFromRevision(repository: RepositorySummary, hash: string, paths: readonly string[]): Promise<void> {
+    const cwd = fileURLToPath(repository.rootUri);
+    const revision = validateHash(hash);
+    const existing: string[] = [];
+    const missing: string[] = [];
+    for (const path of paths) {
+      try {
+        await this.runner.run(['cat-file', '-e', `${revision}:${path}`], { cwd, timeoutMs: 30_000 });
+        existing.push(path);
+      } catch (error) {
+        if (error instanceof GitCommandError && !error.cancelled) missing.push(path);
+        else throw error;
+      }
+    }
+    if (existing.length) {
+      await this.runner.run(['checkout', revision, '--', ...existing], {
+        cwd,
+        timeoutMs: 60_000,
+        env: { GIT_LITERAL_PATHSPECS: '1' },
+      });
+    }
+    if (missing.length) {
+      // The file does not exist at that revision, so getting it means deleting the local copy.
+      await this.runner.run(['rm', '-f', '--ignore-unmatch', '--quiet', '--', ...missing], {
+        cwd,
+        timeoutMs: 60_000,
+        env: { GIT_LITERAL_PATHSPECS: '1' },
+      });
+    }
   }
 
   private getQueueKey(repository: RepositorySummary): string {

@@ -8,11 +8,12 @@ import type { DiffManager } from '../diff/DiffManager';
 import {
   parseWebviewMessage,
   type PersistedWorkbenchState,
+  type WorkbenchCommand,
   type WorkbenchLayout,
 } from '../protocol/messages';
 import type { RepositoryRegistry } from '../repositories/RepositoryRegistry';
 import { RepositoryWatchManager } from '../repositories/RepositoryWatchManager';
-import type { EditorHistoryRequest, FolderHistoryRequest } from '../shared/models';
+import type { EditorHistoryRequest, FolderHistoryRequest, RepositorySummary } from '../shared/models';
 import { createWebviewHtml } from './createWebviewHtml';
 import { WorkbenchController } from './WorkbenchController';
 
@@ -50,6 +51,10 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
     private readonly operationService: GitOperationService,
     private readonly repositories: RepositoryRegistry,
     private readonly diffManager: DiffManager,
+    private readonly runWorkbenchCommand?: (
+      repository: RepositorySummary,
+      command: WorkbenchCommand,
+    ) => Promise<void>,
   ) {}
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -147,6 +152,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
         this.diffManager.openFile(repository.id, vscode.Uri.parse(repository.rootUri), request),
       openCommitComparison: (repository, request, files) =>
         this.diffManager.openCommit(repository.id, request, files),
+      ...(this.runWorkbenchCommand ? { runWorkbenchCommand: this.runWorkbenchCommand } : {}),
     });
     controllerRef.current = controller;
 

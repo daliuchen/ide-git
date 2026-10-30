@@ -39,13 +39,13 @@ describe('extension contributions', () => {
     expect(missing).toEqual([]);
   });
 
-  it('uses ascenx.git-log as the extension identifier', async () => {
+  it('uses daliuchen.git-log-plus as the extension identifier', async () => {
     const packageJson = JSON.parse(await readFile('package.json', 'utf8')) as {
       name?: string;
       publisher?: string;
     };
 
-    expect(`${packageJson.publisher}.${packageJson.name}`).toBe('ascenx.git-log');
+    expect(`${packageJson.publisher}.${packageJson.name}`).toBe('daliuchen.git-log-plus');
   });
 
   it('declares VS Code 1.85 and Node 18 as the extension compatibility baseline', async () => {
@@ -95,9 +95,9 @@ describe('extension contributions', () => {
       displayName?: string;
       description?: string;
     };
-    expect(packageJson.displayName).toBe('Git Log — Commit Graph & History');
+    expect(packageJson.displayName).toBe('Git Log Plus — Commit, Log & History');
     expect(packageJson.description).toBe(
-      'A visual Git log, commit graph, history browser, and repository operations extension for Visual Studio Code.',
+      'A full IDE-style Git workflow for VS Code and Cursor: commit tool window with changelists, commit graph log, interactive rebase, push dialog, annotate, and editable diffs.',
     );
 
     const files = [
@@ -118,7 +118,7 @@ describe('extension contributions', () => {
     expect(violations).toEqual([]);
   });
 
-  it('contributes Git Log as a bottom panel tab without an activity-bar launcher', async () => {
+  it('contributes Git Log as a bottom panel tab and Commit as an activity-bar view', async () => {
     const packageJson = JSON.parse(await readFile('package.json', 'utf8')) as {
       version?: string;
       activationEvents?: string[];
@@ -135,9 +135,11 @@ describe('extension contributions', () => {
       };
     };
 
-    expect(packageJson.version).toBe('0.1.3');
+    expect(packageJson.version).toBe('0.3.0');
     expect(packageJson.contributes?.viewsWelcome).toBeUndefined();
-    expect(packageJson.contributes?.viewsContainers?.activitybar).toBeUndefined();
+    expect(packageJson.contributes?.viewsContainers?.activitybar).toEqual([
+      expect.objectContaining({ id: 'gitLogCommit', title: 'Commit' }),
+    ]);
     expect(packageJson.contributes?.viewsContainers?.panel).toEqual([
       expect.objectContaining({ id: 'gitLogWorkbench', title: 'Git Log' }),
     ]);
@@ -161,6 +163,9 @@ describe('extension contributions', () => {
       }),
     );
     expect(packageJson.contributes?.menus?.['gitLogWorkbench.editorContext']).toEqual([
+      expect.objectContaining({ command: 'gitLogWorkbench.editor.toggleAnnotate' }),
+      expect.objectContaining({ command: 'gitLogWorkbench.editor.commitChange' }),
+      expect.objectContaining({ command: 'gitLogWorkbench.editor.amendChange' }),
       expect.objectContaining({
         command: 'gitLogWorkbench.editor.showLineHistory',
         when: 'resourceScheme == file && !editorHasSelection',

@@ -4,6 +4,7 @@ import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import * as vscode from 'vscode';
+import { DiffManager } from '../../src/diff/DiffManager';
 import { HistoryPatchSyntaxHighlighter } from '../../src/editor/HistoryPatchSyntaxHighlighter';
 import { ShikiHistoryCodeTokenizer } from '../../src/editor/ShikiHistoryCodeTokenizer';
 
@@ -26,7 +27,7 @@ async function waitForTab(
 }
 
 export async function run(): Promise<void> {
-  const extension = vscode.extensions.getExtension('ascenx.git-log');
+  const extension = vscode.extensions.getExtension('daliuchen.git-log-plus');
   assert.ok(extension, 'the Git Log extension should be installed in the test host');
 
   await extension.activate();
@@ -219,6 +220,58 @@ export async function run(): Promise<void> {
       document.getText(),
       'the native diff should compare the unsaved editor text instead of the saved file',
     );
+
+    const commands = await vscode.commands.getCommands(true);
+    for (const command of [
+      'gitLogWorkbench.commit.open',
+      'gitLogWorkbench.push',
+      'gitLogWorkbench.updateProject',
+      'gitLogWorkbench.diff.jumpToSource',
+      'gitLogWorkbench.editor.toggleAnnotate',
+    ]) {
+      assert.ok(commands.includes(command), `${command} should be registered`);
+    }
+    await vscode.commands.executeCommand('gitLogWorkbench.commit.open');
+
+    // Jump to Source maps a read-only revision document to the editable working-tree file.
+    const revisionDocument = await vscode.workspace.openTextDocument(comparisonTab.input.original);
+    const revisionEditor = await vscode.window.showTextDocument(revisionDocument, { preview: false });
+    revisionEditor.selection = new vscode.Selection(1, 0, 1, 0);
+    await vscode.commands.executeCommand('gitLogWorkbench.diff.jumpToSource');
+    assert.equal(
+      vscode.window.activeTextEditor?.document.uri.fsPath,
+      fixturePath.fsPath,
+      'Jump to Source should open the working-tree file',
+    );
+    assert.equal(vscode.window.activeTextEditor?.selection.active.line, 1, 'Jump to Source should keep the line');
+
+    // Diffs use the real file on the side that matches the working tree, so it stays editable.
+    const revisionQuery = new URLSearchParams(comparisonTab.input.original.query);
+    const repositoryId = revisionQuery.get('repositoryId') ?? '';
+    const head = revisionQuery.get('revision') ?? '';
+    const editableDiffs = new DiffManager({ findIdenticalWorkingFile: () => Promise.resolve(fixturePath) });
+    await editableDiffs.open(repositoryId, { hash: head, path: 'editor-history.ts', status: 'A' });
+    const editableTab = await waitForTab(
+      (tab) =>
+        tab.input instanceof vscode.TabInputTextDiff &&
+        tab.input.modified.toString() === fixturePath.toString(),
+      'a commit diff whose content matches the working tree should open the real file',
+    );
+    assert.ok(editableTab.input instanceof vscode.TabInputTextDiff);
+    await editableDiffs.openLocalChange(repositoryId, vscode.Uri.file(workspaceRoot), {
+      head,
+      path: 'editor-history.ts',
+      status: 'M',
+      preview: false,
+    });
+    await waitForTab(
+      (tab) => tab.label === 'editor-history.ts (HEAD ↔ Local)' && tab.input instanceof vscode.TabInputTextDiff,
+      'the Commit view diff should compare HEAD with the local file',
+    );
+
+    await vscode.window.showTextDocument(document);
+    await vscode.commands.executeCommand('gitLogWorkbench.editor.toggleAnnotate');
+    await vscode.commands.executeCommand('gitLogWorkbench.editor.toggleAnnotate');
   } finally {
     if (fixtureDocument?.isDirty) {
       await vscode.window.showTextDocument(fixtureDocument);

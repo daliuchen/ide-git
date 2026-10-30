@@ -973,6 +973,17 @@ export class GitService {
     return files.map((file) => ({ ...file }));
   }
 
+  /** Files that differ between `revision` and the working tree (tracked files only). */
+  async getWorkingTreeChanges(cwd: string, revision: string, signal?: AbortSignal): Promise<ChangedFile[]> {
+    if (!COMMIT_HASH_PATTERN.test(revision)) throw new Error(`Invalid commit hash: ${revision}`);
+    const signalOption = signal ? { signal } : {};
+    const [statusResult, numstatResult] = await Promise.all([
+      this.runner.run(['diff', '--name-status', '-z', '-M', revision, '--'], { cwd, ...signalOption, timeoutMs: 60_000 }),
+      this.runner.run(['diff', '--numstat', '-z', '-M', revision, '--'], { cwd, ...signalOption, timeoutMs: 60_000 }),
+    ]);
+    return applyNumstat(parseNameStatus(statusResult.stdout), numstatResult.stdout);
+  }
+
   async getFilePatch(
     cwd: string,
     hash: string,

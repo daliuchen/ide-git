@@ -1,5 +1,7 @@
+import { join } from 'node:path';
 import * as vscode from 'vscode';
 import { DiffManager } from './diff/DiffManager';
+import { jumpToSource } from './diff/jumpToSource';
 import { releaseNativeDiffResourcesIfUnused } from './diff/NativeDiffResources';
 import { RevisionContentLoader } from './diff/RevisionContentLoader';
 import { REVISION_SCHEME, RevisionContentProvider } from './diff/RevisionContentProvider';
@@ -15,6 +17,7 @@ import {
   type CurrentLineBlamePresentation,
   type CurrentLineEditorSnapshot,
 } from './editor/CurrentLineBlameController';
+import { FileAnnotationController } from './editor/FileAnnotationController';
 import { FileComparisonEditor } from './editor/FileComparisonEditor';
 import { FileHistoryEditor } from './editor/FileHistoryEditor';
 import { HistoryNativeDiffOpener } from './editor/HistoryNativeDiffOpener';
@@ -35,6 +38,13 @@ import { LineBlameService } from './git/LineBlameService';
 import { registerExtension } from './registerExtension';
 import { RepositoryRegistry } from './repositories/RepositoryRegistry';
 import { WorkbenchViewProvider } from './webview/WorkbenchPanel';
+import { CommitViewProvider } from './commit/CommitViewProvider';
+import { BranchesPopup } from './branches/BranchesPopup';
+import { GitDialogs } from './dialogs/GitDialogs';
+import { discoverRepositories, inspectRepository } from './repositories/discoverRepositories';
+import type { RepositorySummary } from './shared/models';
+import { runWorkbenchCommand } from './webview/WorkbenchCommands';
+import { LocalChangesService } from './commit/LocalChangesService';
 
 const MAX_DIRTY_BLAME_CHARACTERS = 2 * 1024 * 1024;
 const MAX_EDIT_TIME_DOCUMENTS = 50;
@@ -70,7 +80,12 @@ export function activate(context: vscode.ExtensionContext): void {
   const gitService = new GitService(runner);
   const lineBlameService = new LineBlameService(runner);
   const fileHistoryService = new FileHistoryService(runner);
-  const operationService = new GitOperationService(runner);
+  const commitPanel: { focus?: (message?: string) => Promise<void> } = {};
+  const operationService = new GitOperationService(runner, {
+    onCommitUndone: (_repository, message) => {
+      void commitPanel.focus?.(message);
+    },
+  });
   const repositories = new RepositoryRegistry();
   const maximumDiffFileBytes = configuration.get<number>(
     'performance.maxDiffFileBytes',
@@ -81,7 +96,23 @@ export function activate(context: vscode.ExtensionContext): void {
     gitService,
     maximumDiffFileBytes,
   );
-  const diffManager = new DiffManager();
+  const diffManager = new DiffManager({
+    findIdenticalWorkingFile: async (repositoryId, revision, path) => {
+      const root = repositories.getRoot(repositoryId);
+      if (!root) return undefined;
+      try {
+        // Exit code 0 means the working-tree file equals the revision's version.
+        await runner.run(['diff', '--quiet', revision, '--', path], {
+          cwd: root,
+          timeoutMs: 10_000,
+          env: { GIT_LITERAL_PATHSPECS: '1' },
+        });
+      } catch {
+        return undefined;
+      }
+      return vscode.Uri.file(join(root, path));
+    },
+  });
   const editorContexts = new EditorGitContextService(runner);
   const customLineBlameEnabled = (resource?: vscode.Uri): boolean =>
     shouldUseCustomLineBlame(
@@ -350,11 +381,160 @@ export function activate(context: vscode.ExtensionContext): void {
     operationService,
     repositories,
     diffManager,
+    (repository, command) => runWorkbenchCommand(commandHost, repository, command),
   );
   const workbenchViewRegistration = vscode.window.registerWebviewViewProvider(
     'gitLogWorkbench.log',
     workbenchProvider,
     { webviewOptions: { retainContextWhenHidden: true } },
+  );
+  const commitViewProvider = new CommitViewProvider(
+    context,
+    output,
+    runner,
+    new LocalChangesService(runner),
+    repositories,
+    diffManager,
+    {
+      push: async (repository) => {
+        await vscode.commands.executeCommand('gitLogWorkbench.push', repository.rootUri);
+      },
+    },
+  );
+  commitPanel.focus = (message) => commitViewProvider.focus(message);
+  const dialogs = new GitDialogs(
+    context.extensionUri,
+    runner,
+    gitService,
+    operationService,
+    repositories,
+    diffManager,
+    output,
+  );
+  const resolveRepository = async (resource: unknown): Promise<RepositorySummary | undefined> => {
+    let fsPath: string | undefined;
+    if (resource instanceof vscode.Uri) fsPath = resource.fsPath;
+    else if (typeof resource === 'string') fsPath = resource.startsWith('file:') ? vscode.Uri.parse(resource).fsPath : resource;
+    if (!fsPath) {
+      const configuration = vscode.workspace.getConfiguration('gitLogWorkbench');
+      const found = (
+        await discoverRepositories(
+          (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
+          runner,
+          {
+            scanDepth: configuration.get<number>('repositories.scanDepth', 2),
+            excludePatterns: configuration.get<string[]>('repositories.exclude', []),
+          },
+        )
+      ).filter((repository) => !repository.isBare);
+      const active = vscode.window.activeTextEditor?.document.uri;
+      const preferred =
+        found.length === 1
+          ? found[0]
+          : found.find((repository) => active?.scheme === 'file' && active.fsPath.startsWith(vscode.Uri.parse(repository.rootUri).fsPath));
+      if (preferred) return preferred;
+      const picked = await vscode.window.showQuickPick(
+        found.map((repository) => ({ label: repository.displayName, description: repository.currentBranch ?? '', repository })),
+        { placeHolder: 'Select a repository' },
+      );
+      return picked?.repository;
+    }
+    const repository = await inspectRepository(fsPath, runner);
+    if (!repository) void vscode.window.showErrorMessage('No Git repository found.');
+    return repository;
+  };
+  const pushCommand = vscode.commands.registerCommand(
+    'gitLogWorkbench.push',
+    async (resource?: unknown, source?: unknown) => {
+      const repository = await resolveRepository(resource);
+      if (!repository) return;
+      await dialogs.openPush(repository, typeof source === 'string' && source ? source : 'HEAD');
+    },
+  );
+  const updateProjectCommand = vscode.commands.registerCommand(
+    'gitLogWorkbench.updateProject',
+    async (resource?: unknown) => {
+      const repository = await resolveRepository(resource);
+      if (!repository) return;
+      const previous = context.globalState.get<'rebase' | 'merge'>('updateProject.mode', 'rebase');
+      const options = [
+        { label: 'Rebase', description: 'git pull --rebase --autostash', mode: 'rebase' as const },
+        { label: 'Merge', description: 'git pull --no-rebase --autostash', mode: 'merge' as const },
+      ];
+      // The last used strategy is offered first, so Enter repeats it.
+      if (previous === 'merge') options.reverse();
+      const picked = await vscode.window.showQuickPick(options, {
+        placeHolder: `Update ${repository.displayName}${repository.currentBranch ? ` (${repository.currentBranch})` : ''} from its upstream`,
+      });
+      if (!picked) return;
+      await context.globalState.update('updateProject.mode', picked.mode);
+      try {
+        await vscode.window.withProgress(
+          { location: vscode.ProgressLocation.Notification, title: `Updating ${repository.displayName}…` },
+          () => operationService.run(repository, { kind: 'updateProject', rebase: picked.mode === 'rebase' }),
+        );
+        void vscode.window.showInformationMessage(`${repository.displayName} is up to date.`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        output.appendLine(`[update] ${message}`);
+        void vscode.window.showErrorMessage(`Update failed: ${message}`);
+      }
+    },
+  );
+  const commandHost = {
+    runner,
+    gitService,
+    diffManager,
+    repositories,
+    focusCommitPanel: (message?: string) => commitViewProvider.focus(message),
+    openRebaseDialog: (target: RepositorySummary, hash: string, mode: 'interactive' | 'reword') =>
+      dialogs.openRebase(target, hash, mode),
+  };
+  const branchesPopup = new BranchesPopup(runner, operationService, (repository) => dialogs.openPush(repository));
+  const branchesCommand = vscode.commands.registerCommand('gitLogWorkbench.branches', async (resource?: unknown) => {
+    const repository = await resolveRepository(resource);
+    if (repository) await branchesPopup.show(repository);
+  });
+  const compareWithLocalCommand = vscode.commands.registerCommand(
+    'gitLogWorkbench.compareWithLocal',
+    async (resource?: unknown, revision?: unknown) => {
+      const repository = await resolveRepository(resource);
+      if (!repository || typeof revision !== 'string') return;
+      await runWorkbenchCommand(commandHost, repository, { kind: 'compareWithLocal', hash: revision });
+    },
+  );
+  const vcsOperationsCommand = vscode.commands.registerCommand('gitLogWorkbench.vcsOperations', async () => {
+    const operations: (vscode.QuickPickItem & { command: string })[] = [
+      { label: '$(check) Commit…', command: 'gitLogWorkbench.commit.open' },
+      { label: '$(repo-push) Push…', command: 'gitLogWorkbench.push' },
+      { label: '$(repo-pull) Update Project…', command: 'gitLogWorkbench.updateProject' },
+      { label: '$(git-branch) Branches…', command: 'gitLogWorkbench.branches' },
+      { label: '$(git-commit) Show Git Log', command: 'gitLogWorkbench.openLog' },
+      { label: '$(person) Annotate with Git Blame', command: 'gitLogWorkbench.editor.toggleAnnotate' },
+      { label: '$(history) Show File History', command: 'gitLogWorkbench.editor.showFileHistory' },
+      { label: '$(history) Show History for Selection', command: 'gitLogWorkbench.editor.showSelectionHistory' },
+      { label: '$(diff) Compare File with Branch or Tag…', command: 'gitLogWorkbench.editor.compareFileWithRef' },
+    ];
+    const picked = await vscode.window.showQuickPick(operations, { placeHolder: 'VCS Operations' });
+    if (picked) await vscode.commands.executeCommand(picked.command);
+  });
+  const commitViewRegistration = vscode.window.registerWebviewViewProvider(
+    'gitLogWorkbench.commit',
+    commitViewProvider,
+    { webviewOptions: { retainContextWhenHidden: true } },
+  );
+  const commitCommand = vscode.commands.registerCommand('gitLogWorkbench.commit.open', () =>
+    commitViewProvider.focus(),
+  );
+  const commitChangeCommand = vscode.commands.registerCommand('gitLogWorkbench.editor.commitChange', () =>
+    commitViewProvider.commitChangeAtCursor(false).catch((error: unknown) => {
+      void vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
+    }),
+  );
+  const amendChangeCommand = vscode.commands.registerCommand('gitLogWorkbench.editor.amendChange', () =>
+    commitViewProvider.commitChangeAtCursor(true).catch((error: unknown) => {
+      void vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
+    }),
   );
   const editorHistoryCommands = new EditorHistoryCommands(editorContexts, repositories, {
     getActiveEditor: () => {
@@ -423,6 +603,21 @@ export function activate(context: vscode.ExtensionContext): void {
     lineHistoryEditor,
     workbenchProvider,
     workbenchViewRegistration,
+    commitViewProvider,
+    commitViewRegistration,
+    commitCommand,
+    commitChangeCommand,
+    amendChangeCommand,
+    new FileAnnotationController(runner, repositories, diffManager),
+    dialogs,
+    branchesCommand,
+    compareWithLocalCommand,
+    vcsOperationsCommand,
+    pushCommand,
+    updateProjectCommand,
+    vscode.commands.registerCommand('gitLogWorkbench.diff.jumpToSource', (resource?: unknown) =>
+      jumpToSource(runner, repositories, resource instanceof vscode.Uri ? resource : undefined),
+    ),
     ...registrations,
     vscode.workspace.registerTextDocumentContentProvider(
       REVISION_SCHEME,

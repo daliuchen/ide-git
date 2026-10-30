@@ -16,6 +16,7 @@ import type {
   LogFilters,
   PersistedWorkbenchState,
   WebviewToExtensionMessage,
+  WorkbenchCommand,
   WorkbenchLayout,
 } from '../protocol/messages';
 import {
@@ -88,6 +89,7 @@ export interface WorkbenchControllerOptions {
     request: { hash: string; parent: string },
     files: readonly ChangedFile[],
   ): Promise<void>;
+  runWorkbenchCommand?(repository: RepositorySummary, command: WorkbenchCommand): Promise<void>;
 }
 
 function mergeSelectedCommitFiles(files: readonly ChangedFile[]): ChangedFile[] {
@@ -465,6 +467,10 @@ export class WorkbenchController {
         }
         case 'runOperation':
           await this.runOperation(message);
+          break;
+        case 'workbenchCommand':
+          if (!this.options.runWorkbenchCommand) throw new Error('This action is not available.');
+          await this.options.runWorkbenchCommand(this.requireRepository(message.repositoryId), message.command);
           break;
       }
     } catch (error) {

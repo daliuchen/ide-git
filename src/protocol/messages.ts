@@ -140,7 +140,8 @@ export type WebviewToExtensionMessage =
       parent?: string;
     }
   | { type: 'updateLayout'; requestId: string; layout: WorkbenchLayout }
-  | { type: 'runOperation'; requestId: string; repositoryId: string; operation: GitOperationRequest };
+  | { type: 'runOperation'; requestId: string; repositoryId: string; operation: GitOperationRequest }
+  | { type: 'workbenchCommand'; requestId: string; repositoryId: string; command: WorkbenchCommand };
 
 export type GitOperationRequest =
   | { kind: 'checkout'; ref: string }
@@ -172,7 +173,47 @@ export type GitOperationRequest =
   | { kind: 'dropStash'; stash: string }
   | { kind: 'amendCommit'; message: string }
   | { kind: 'dropCommits'; hashes: string[] }
-  | { kind: 'squashCommits'; hashes: string[]; message: string };
+  | { kind: 'squashCommits'; hashes: string[]; message: string }
+  | { kind: 'rewordCommit'; hash: string; message: string }
+  | { kind: 'undoCommit'; hash: string }
+  | { kind: 'interactiveRebase'; base?: string; steps: RebaseStep[] }
+  | { kind: 'checkoutAndRebase'; branch: string }
+  | { kind: 'pullFrom'; remote: string; branch: string; rebase: boolean }
+  | { kind: 'updateBranch'; remote: string; remoteBranch: string; localBranch: string }
+  | { kind: 'updateProject'; rebase: boolean }
+  | {
+      kind: 'pushTo';
+      remote: string;
+      /** `HEAD` or a commit hash ("Push All up to Here"). */
+      source: string;
+      branch: string;
+      setUpstream: boolean;
+      forceWithLease: boolean;
+      pushTags: boolean;
+    }
+  | { kind: 'applyFileChanges'; hash: string; parent?: string; paths: string[]; reverse: boolean }
+  | { kind: 'getFromRevision'; hash: string; paths: string[] }
+  | { kind: 'dropFileChanges'; hash: string; paths: string[] };
+
+export type RebaseAction = 'pick' | 'reword' | 'edit' | 'squash' | 'fixup' | 'drop';
+
+export interface RebaseStep {
+  hash: string;
+  action: RebaseAction;
+  /** Final message for a reword, or for the first commit of a squash group. */
+  message?: string;
+}
+
+/** Editor-side actions requested from the Git Log that do not change repository state directly. */
+export type WorkbenchCommand =
+  | { kind: 'compareWithLocal'; hash: string; path?: string; status?: ChangedFile['status'] }
+  | { kind: 'jumpToSource'; path: string }
+  | { kind: 'showFileHistory'; path: string }
+  | { kind: 'createPatch'; hashes: string[]; paths?: string[] }
+  | { kind: 'prepareFixup'; hash: string; squash: boolean }
+  | { kind: 'openRebaseDialog'; hash: string; mode: 'interactive' | 'reword' }
+  | { kind: 'openPushDialog'; source?: string }
+  | { kind: 'openCommitPanel' };
 
 export type ErrorRecoveryAction = { kind: 'forceDeleteBranch'; branch: string };
 
@@ -487,6 +528,69 @@ function isStashRef(value: unknown): value is string {
   return typeof value === 'string' && /^stash@\{\d+\}$/u.test(value);
 }
 
+const MAX_REBASE_STEPS = 500;
+const REBASE_ACTIONS: readonly RebaseAction[] = ['pick', 'reword', 'edit', 'squash', 'fixup', 'drop'];
+
+function isCommitMessage(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.trim().length > 0 &&
+    value.length <= MAX_COMMIT_MESSAGE_LENGTH &&
+    !value.includes('\0')
+  );
+}
+
+function isRebaseStep(value: unknown): value is RebaseStep {
+  return (
+    isRecord(value) &&
+    isHash(value.hash) &&
+    REBASE_ACTIONS.includes(value.action as RebaseAction) &&
+    (value.message === undefined || isCommitMessage(value.message))
+  );
+}
+
+function isPathList(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.length <= 10_000 &&
+    value.every(isRepositoryPath)
+  );
+}
+
+function isWorkbenchCommand(value: unknown): value is WorkbenchCommand {
+  if (!isRecord(value) || typeof value.kind !== 'string') return false;
+  switch (value.kind) {
+    case 'compareWithLocal':
+      return (
+        isHash(value.hash) &&
+        (value.path === undefined || isRepositoryPath(value.path)) &&
+        (value.status === undefined || isChangedFileStatus(value.status))
+      );
+    case 'jumpToSource':
+    case 'showFileHistory':
+      return isRepositoryPath(value.path);
+    case 'createPatch':
+      return (
+        Array.isArray(value.hashes) &&
+        value.hashes.length > 0 &&
+        value.hashes.length <= MAX_COMMIT_RANGE &&
+        value.hashes.every(isHash) &&
+        (value.paths === undefined || isPathList(value.paths))
+      );
+    case 'prepareFixup':
+      return isHash(value.hash) && typeof value.squash === 'boolean';
+    case 'openRebaseDialog':
+      return isHash(value.hash) && (value.mode === 'interactive' || value.mode === 'reword');
+    case 'openPushDialog':
+      return value.source === undefined || isHash(value.source);
+    case 'openCommitPanel':
+      return true;
+    default:
+      return false;
+  }
+}
+
 function isGitOperationRequest(value: unknown): value is GitOperationRequest {
   if (!isRecord(value) || typeof value.kind !== 'string') return false;
   switch (value.kind) {
@@ -555,6 +659,50 @@ function isGitOperationRequest(value: unknown): value is GitOperationRequest {
       );
     case 'dropCommits':
       return isCommitRange(value.hashes);
+    case 'rewordCommit':
+      return isHash(value.hash) && isCommitMessage(value.message);
+    case 'undoCommit':
+      return isHash(value.hash);
+    case 'interactiveRebase':
+      return (
+        (value.base === undefined || isHash(value.base)) &&
+        Array.isArray(value.steps) &&
+        value.steps.length > 0 &&
+        value.steps.length <= MAX_REBASE_STEPS &&
+        value.steps.every(isRebaseStep) &&
+        new Set(value.steps.map((step) => (step as RebaseStep).hash)).size === value.steps.length
+      );
+    case 'checkoutAndRebase':
+      return isGitRefName(value.branch);
+    case 'pullFrom':
+      return isSafeGitToken(value.remote) && isRemoteBranchName(value.branch) && typeof value.rebase === 'boolean';
+    case 'updateBranch':
+      return (
+        isSafeGitToken(value.remote) &&
+        isRemoteBranchName(value.remoteBranch) &&
+        isGitRefName(value.localBranch)
+      );
+    case 'updateProject':
+      return typeof value.rebase === 'boolean';
+    case 'pushTo':
+      return (
+        isSafeGitToken(value.remote) &&
+        (value.source === 'HEAD' || isHash(value.source)) &&
+        isRemoteBranchName(value.branch) &&
+        typeof value.setUpstream === 'boolean' &&
+        typeof value.forceWithLease === 'boolean' &&
+        typeof value.pushTags === 'boolean'
+      );
+    case 'applyFileChanges':
+      return (
+        isHash(value.hash) &&
+        (value.parent === undefined || isHash(value.parent)) &&
+        isPathList(value.paths) &&
+        typeof value.reverse === 'boolean'
+      );
+    case 'getFromRevision':
+    case 'dropFileChanges':
+      return isHash(value.hash) && isPathList(value.paths);
     case 'squashCommits':
       return (
         isCommitRange(value.hashes) &&
@@ -792,6 +940,15 @@ export function parseWebviewMessage(value: unknown): WebviewToExtensionMessage |
             hash: value.hash,
             mode: value.mode,
             ...(typeof value.parent === 'string' ? { parent: value.parent } : {}),
+          }
+        : undefined;
+    case 'workbenchCommand':
+      return hasRepository(value) && isWorkbenchCommand(value.command)
+        ? {
+            type: value.type,
+            requestId: value.requestId,
+            repositoryId: value.repositoryId,
+            command: value.command,
           }
         : undefined;
     case 'runOperation':

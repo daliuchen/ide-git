@@ -20,6 +20,7 @@ import {
   type GitOperationRequest,
   type LogFilters,
   type WebviewToExtensionMessage,
+  type WorkbenchCommand,
   type WorkbenchLayout,
 } from '../../src/protocol/messages';
 import type {
@@ -1951,6 +1952,32 @@ export function App() {
     });
   };
 
+  const runWorkbenchCommand = (
+    command: WorkbenchCommand,
+    repositoryId = state.selectedRepositoryId,
+  ): void => {
+    setContextMenu(undefined);
+    if (!repositoryId) return;
+    const message = parseWebviewMessage({
+      type: 'workbenchCommand',
+      requestId: requestId(`command-${command.kind}`),
+      repositoryId,
+      command,
+    });
+    if (!message) {
+      setState((current) => ({ ...current, error: 'Invalid Git Log action.', errorRecovery: undefined }));
+      return;
+    }
+    send(message);
+  };
+
+  /** The commit (and parent) a changed file belongs to, including in multi-commit selections. */
+  const fileRevision = (file: ChangedFile): { hash?: string; parent?: string } => {
+    const hash = file.commitHash ?? state.details?.hash;
+    const parent = file.parentHash ?? state.selectedParent;
+    return { ...(hash ? { hash } : {}), ...(parent ? { parent } : {}) };
+  };
+
   const openFile = (file: ChangedFile, mode: 'revision' | 'current'): void => {
     if (
       !state.detailsRepositoryId ||
@@ -2475,6 +2502,29 @@ export function App() {
         ) : null}
       </header>
   );
+
+  const fileMenu = (() => {
+    if (contextMenu?.kind !== 'file' || selectedRepository?.isBare) return undefined;
+    const file = contextMenu.file;
+    const revision = fileRevision(file);
+    if (!revision.hash) return undefined;
+    return {
+      file,
+      hash: revision.hash,
+      ...(revision.parent ? { parent: revision.parent } : {}),
+      paths: file.oldPath && file.oldPath !== file.path ? [file.path, file.oldPath] : [file.path],
+      busy: selectedOperationInFlight || Boolean(selectedRepository?.operationState),
+    };
+  })();
+  const refUpstream = (() => {
+    if (contextMenu?.kind !== 'ref' || !contextMenu.ref.upstream) return undefined;
+    const upstream = contextMenu.ref.upstream.replace(/^refs\/remotes\//u, '');
+    const remote = (contextMenu.ref.remote && upstream.startsWith(`${contextMenu.ref.remote}/`))
+      ? contextMenu.ref.remote
+      : upstream.slice(0, Math.max(0, upstream.indexOf('/')));
+    if (!remote) return undefined;
+    return { remote, branch: upstream.slice(remote.length + 1) };
+  })();
 
   const globalToolbar = (
     <header className="global-toolbar" role="toolbar" aria-label="Global Git actions">
@@ -3449,11 +3499,37 @@ export function App() {
                   type="button"
                   role="menuitem"
                   disabled={!selectedRepository?.currentBranch}
-                  onClick={() => runOperation({ kind: 'push' }, contextMenu.repositoryId)}
+                  title="Review outgoing commits, choose the target branch, and push"
+                  onClick={() => runWorkbenchCommand({ kind: 'openPushDialog' }, contextMenu.repositoryId)}
                 >
-                  Push
+                  Push…
                 </button>
               )}
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!selectedRepository?.currentBranch || selectedOperationInFlight}
+                title="git pull --rebase --autostash"
+                onClick={() => runOperation({ kind: 'updateProject', rebase: true }, contextMenu.repositoryId)}
+              >
+                Update Project (Rebase)
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!selectedRepository?.currentBranch || selectedOperationInFlight}
+                title="git pull --no-rebase --autostash"
+                onClick={() => runOperation({ kind: 'updateProject', rebase: false }, contextMenu.repositoryId)}
+              >
+                Update Project (Merge)
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => runWorkbenchCommand({ kind: 'openCommitPanel' }, contextMenu.repositoryId)}
+              >
+                Commit…
+              </button>
               <button
                 type="button"
                 role="menuitem"
@@ -3559,6 +3635,108 @@ export function App() {
               >
                 Compare with Current
               </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={selectedRepository?.isBare}
+                title="Compare this commit with the working tree; the local side is editable"
+                onClick={() =>
+                  runWorkbenchCommand({ kind: 'compareWithLocal', hash: contextMenu.commit.hash }, contextMenu.repositoryId)
+                }
+              >
+                Compare with Local
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                title="Save or copy the selected commits as a patch (git format-patch)"
+                onClick={() =>
+                  runWorkbenchCommand(
+                    { kind: 'createPatch', hashes: contextMenu.commits.map((commit) => commit.hash) },
+                    contextMenu.repositoryId,
+                  )
+                }
+              >
+                Create Patch…
+              </button>
+              {contextMenu.commits.length === 1 && !selectedRepository?.isBare && !selectedRepository?.operationState ? (
+                <>
+                  <div className="context-menu-separator" role="separator" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={selectedOperationInFlight || contextMenu.commit.parents.length > 1}
+                    title="Change the message of this commit and recreate newer commits"
+                    onClick={() =>
+                      runWorkbenchCommand(
+                        { kind: 'openRebaseDialog', hash: contextMenu.commit.hash, mode: 'reword' },
+                        contextMenu.repositoryId,
+                      )
+                    }
+                  >
+                    Edit Commit Message…
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    title="Prepare a fixup! commit for this commit in the Commit view"
+                    onClick={() =>
+                      runWorkbenchCommand({ kind: 'prepareFixup', hash: contextMenu.commit.hash, squash: false }, contextMenu.repositoryId)
+                    }
+                  >
+                    Fixup…
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    title="Prepare a squash! commit for this commit in the Commit view"
+                    onClick={() =>
+                      runWorkbenchCommand({ kind: 'prepareFixup', hash: contextMenu.commit.hash, squash: true }, contextMenu.repositoryId)
+                    }
+                  >
+                    Squash Into…
+                  </button>
+                  {selectedRepository?.head === contextMenu.commit.hash && contextMenu.commit.parents.length === 1 ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={selectedOperationInFlight}
+                      title="Remove this commit and keep its changes staged, with its message in the Commit view"
+                      onClick={() =>
+                        runOperation({ kind: 'undoCommit', hash: contextMenu.commit.hash }, contextMenu.repositoryId)
+                      }
+                    >
+                      Undo Commit
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={selectedOperationInFlight}
+                    title="Reorder, reword, squash, fixup, edit, or drop this commit and newer ones"
+                    onClick={() =>
+                      runWorkbenchCommand(
+                        { kind: 'openRebaseDialog', hash: contextMenu.commit.hash, mode: 'interactive' },
+                        contextMenu.repositoryId,
+                      )
+                    }
+                  >
+                    Interactively Rebase from Here…
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={selectedOperationInFlight}
+                    title="Push this commit and its ancestors without pushing newer commits"
+                    onClick={() =>
+                      runWorkbenchCommand({ kind: 'openPushDialog', source: contextMenu.commit.hash }, contextMenu.repositoryId)
+                    }
+                  >
+                    Push All up to Here…
+                  </button>
+                  <div className="context-menu-separator" role="separator" />
+                </>
+              ) : null}
               {!selectedRepository?.isBare && !selectedRepository?.operationState ? (
                 <>
               {contextMenu.commits.length === 1 ? (
@@ -3812,6 +3990,98 @@ export function App() {
               >
                 Open Current File
               </button>
+              {fileMenu ? (
+                <>
+                  <div className="context-menu-separator" role="separator" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={fileMenu.file.binary}
+                    title="Compare this revision with the working-tree file, which stays editable"
+                    onClick={() =>
+                      runWorkbenchCommand({ kind: 'compareWithLocal', hash: fileMenu.hash, path: fileMenu.file.path, status: fileMenu.file.status })
+                    }
+                  >
+                    Compare with Local
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    title="Open the working-tree file (F4)"
+                    disabled={fileMenu.file.status === 'D'}
+                    onClick={() => runWorkbenchCommand({ kind: 'jumpToSource', path: fileMenu.file.path })}
+                  >
+                    Jump to Source
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => runWorkbenchCommand({ kind: 'showFileHistory', path: fileMenu.file.status === 'D' ? (fileMenu.file.oldPath ?? fileMenu.file.path) : fileMenu.file.path })}
+                  >
+                    Show History for File
+                  </button>
+                  <div className="context-menu-separator" role="separator" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={fileMenu.busy}
+                    title="Apply the reverse of this file's change to the working tree"
+                    onClick={() =>
+                      runOperation({
+                        kind: 'applyFileChanges',
+                        hash: fileMenu.hash,
+                        ...(fileMenu.parent ? { parent: fileMenu.parent } : {}),
+                        paths: fileMenu.paths,
+                        reverse: true,
+                      })
+                    }
+                  >
+                    Revert Selected Changes
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={fileMenu.busy}
+                    title="Apply this file's change to the working tree"
+                    onClick={() =>
+                      runOperation({
+                        kind: 'applyFileChanges',
+                        hash: fileMenu.hash,
+                        ...(fileMenu.parent ? { parent: fileMenu.parent } : {}),
+                        paths: fileMenu.paths,
+                        reverse: false,
+                      })
+                    }
+                  >
+                    Cherry-Pick Selected Changes
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={fileMenu.busy}
+                    title="Replace the local file with this revision's version"
+                    onClick={() => runOperation({ kind: 'getFromRevision', hash: fileMenu.hash, paths: [fileMenu.file.path] })}
+                  >
+                    Get from Revision
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={fileMenu.busy || !selectedRepository?.currentBranch}
+                    title="Remove this file's change from the commit and rewrite newer commits"
+                    onClick={() => runOperation({ kind: 'dropFileChanges', hash: fileMenu.hash, paths: fileMenu.paths })}
+                  >
+                    Drop Selected Changes…
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => runWorkbenchCommand({ kind: 'createPatch', hashes: [fileMenu.hash], paths: fileMenu.paths })}
+                  >
+                    Create Patch…
+                  </button>
+                </>
+              ) : null}
               <button
                 type="button"
                 role="menuitem"
@@ -3838,6 +4108,84 @@ export function App() {
               >
                 Compare with Current
               </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={selectedRepository?.isBare}
+                title="Compare this branch with the working tree"
+                onClick={() => runWorkbenchCommand({ kind: 'compareWithLocal', hash: contextMenu.ref.target })}
+              >
+                Show Diff with Working Tree
+              </button>
+              {!selectedRepository?.isBare && !selectedRepository?.operationState ? (
+                <>
+                  {contextMenu.ref.kind === 'local' && !contextMenu.ref.isCurrent && selectedRepository?.currentBranch ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={selectedOperationInFlight}
+                      title={`git rebase ${selectedRepository.currentBranch} ${contextMenu.ref.shortName}`}
+                      onClick={() => runOperation({ kind: 'checkoutAndRebase', branch: contextMenu.ref.shortName })}
+                    >
+                      Checkout and Rebase onto Current
+                    </button>
+                  ) : null}
+                  {contextMenu.ref.kind === 'remote' && contextMenu.ref.remote && selectedRepository?.currentBranch ? (
+                    <>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={selectedOperationInFlight}
+                        onClick={() =>
+                          runOperation({
+                            kind: 'pullFrom',
+                            remote: contextMenu.ref.remote ?? '',
+                            branch: contextMenu.ref.shortName.slice((contextMenu.ref.remote ?? '').length + 1),
+                            rebase: true,
+                          })
+                        }
+                      >
+                        Pull into Current Using Rebase
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={selectedOperationInFlight}
+                        onClick={() =>
+                          runOperation({
+                            kind: 'pullFrom',
+                            remote: contextMenu.ref.remote ?? '',
+                            branch: contextMenu.ref.shortName.slice((contextMenu.ref.remote ?? '').length + 1),
+                            rebase: false,
+                          })
+                        }
+                      >
+                        Pull into Current Using Merge
+                      </button>
+                    </>
+                  ) : null}
+                  {contextMenu.ref.kind === 'local' && !contextMenu.ref.isCurrent ? (
+                    refUpstream ? (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          disabled={selectedOperationInFlight}
+                          title={`Fast-forward ${contextMenu.ref.shortName} to ${refUpstream.remote}/${refUpstream.branch} without checking it out`}
+                          onClick={() =>
+                            runOperation({
+                              kind: 'updateBranch',
+                              remote: refUpstream.remote,
+                              remoteBranch: refUpstream.branch,
+                              localBranch: contextMenu.ref.shortName,
+                            })
+                          }
+                        >
+                          Update
+                        </button>
+                    ) : null
+                  ) : null}
+                </>
+              ) : null}
               <button
                 type="button"
                 role="menuitem"
