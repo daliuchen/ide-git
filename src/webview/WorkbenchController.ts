@@ -49,6 +49,7 @@ function cloneFilters(filters: LogFilters): LogFilters {
   return {
     ...filters,
     branches: [...filters.branches],
+    ...(filters.compare ? { compare: { ...filters.compare } } : {}),
     authors: [...filters.authors],
     paths: [...filters.paths],
   };
@@ -1045,10 +1046,15 @@ export class WorkbenchController {
     const storedFilters = this.filters.get(repositoryId) ?? EMPTY_LOG_FILTERS;
     const knownRefs = new Set(refs.map((ref) => ref.fullName));
     const validBranches = storedFilters.branches.filter((branch) => knownRefs.has(branch));
+    const staleCompare = Boolean(storedFilters.compare && !knownRefs.has(storedFilters.compare.ref));
     const filters =
-      validBranches.length === storedFilters.branches.length
+      validBranches.length === storedFilters.branches.length && !staleCompare
         ? storedFilters
-        : { ...storedFilters, branches: validBranches };
+        : {
+            ...storedFilters,
+            branches: validBranches,
+            ...(staleCompare ? { compare: undefined } : {}),
+          };
     if (filters !== storedFilters) {
       this.filters.set(repositoryId, filters);
       await this.persistWorkbenchState();
@@ -1298,11 +1304,12 @@ export class WorkbenchController {
       ));
       if (followHead) {
         const filters = this.filters.get(repository.id);
-        if (filters?.allBranches || filters?.branches.length) {
+        if (filters?.allBranches || filters?.branches.length || filters?.compare) {
           this.filters.set(repository.id, {
             ...filters,
             ...(filters.allBranches ? { allBranches: false } : {}),
             branches: [],
+            compare: undefined,
           });
           await this.persistWorkbenchState();
         }
@@ -1322,10 +1329,11 @@ export class WorkbenchController {
         for (const candidate of this.repositories.values()) {
           if (this.getOperationGroup(candidate) !== operationGroup) continue;
           const filters = this.filters.get(candidate.id);
-          if (!filters?.branches.includes(deletedRef)) continue;
+          if (!filters?.branches.includes(deletedRef) && filters?.compare?.ref !== deletedRef) continue;
           this.filters.set(candidate.id, {
             ...filters,
             branches: filters.branches.filter((branch) => branch !== deletedRef),
+            ...(filters.compare?.ref === deletedRef ? { compare: undefined } : {}),
           });
           filtersChanged = true;
         }

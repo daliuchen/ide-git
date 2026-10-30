@@ -18,6 +18,7 @@ import {
   type ErrorRecoveryAction,
   type ExtensionToWebviewMessage,
   type GitOperationRequest,
+  type LogCompare,
   type LogFilters,
   type WebviewToExtensionMessage,
   type WorkbenchCommand,
@@ -64,6 +65,26 @@ const defaultFilters: LogFilters = {
   paths: [],
 };
 
+/** `a`, `a +2`, or '' — the value shown on a filter button. */
+function summarizeFilterValues(values: readonly string[]): string {
+  if (!values.length) return '';
+  return values.length === 1 ? values[0] ?? '' : `${values[0] ?? ''} +${String(values.length - 1)}`;
+}
+
+function describeDateFilter(from?: number, to?: number): string {
+  const format = (seconds: number): string => {
+    const date = new Date(seconds * 1000);
+    return `${String(date.getFullYear())}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+  if (from !== undefined && to !== undefined) {
+    const last = format(to - 1);
+    return format(from) === last ? format(from) : `${format(from)} – ${last}`;
+  }
+  if (from !== undefined) return `since ${format(from)}`;
+  if (to !== undefined) return `until ${format(to - 1)}`;
+  return '';
+}
+
 function filtersEqual(left: LogFilters, right: LogFilters): boolean {
   const sameItems = (leftItems: readonly string[], rightItems: readonly string[]): boolean =>
     leftItems.length === rightItems.length &&
@@ -73,6 +94,8 @@ function filtersEqual(left: LogFilters, right: LogFilters): boolean {
     left.dateFrom === right.dateFrom &&
     left.dateTo === right.dateTo &&
     Boolean(left.allBranches) === Boolean(right.allBranches) &&
+    left.compare?.ref === right.compare?.ref &&
+    left.compare?.direction === right.compare?.direction &&
     sameItems(left.branches, right.branches) &&
     sameItems(left.authors, right.authors) &&
     sameItems(left.paths, right.paths)
@@ -428,6 +451,7 @@ export function App() {
     readScrollTopByRepository(vscode.getState()),
   );
   const [filterPopup, setFilterPopup] = useState<'branch' | 'user' | 'date' | 'paths' | undefined>();
+  const [filterSearch, setFilterSearch] = useState('');
   const [filterPopoverPosition, setFilterPopoverPosition] = useState<
     { top: number; right: number } | undefined
   >();
@@ -562,11 +586,43 @@ export function App() {
       ? !state.filters.branches.includes(ref.fullName)
       : state.filters.branches.includes(ref.fullName),
   );
-  const branchFilterCount = state.filters.allBranches
-    ? selectedBranchRefs.length
-    : state.filters.branches.length;
   const allBranchRefsSelected =
     state.refs.length > 0 && selectedBranchRefs.length === state.refs.length;
+  const currentBranchLabel = selectedRepository?.currentBranch ?? 'HEAD';
+  const compareRef = state.filters.compare
+    ? state.refs.find((ref) => ref.fullName === state.filters.compare?.ref)
+    : undefined;
+  const compareRefName = compareRef?.shortName ?? state.filters.compare?.ref.replace(/^refs\/(heads|remotes|tags)\//u, '');
+  const branchFilterValue = state.filters.compare
+    ? state.filters.compare.direction === 'notInHead'
+      ? `${currentBranchLabel}..${String(compareRefName)}`
+      : `${String(compareRefName)}..${currentBranchLabel}`
+    : state.filters.allBranches
+      ? allBranchRefsSelected
+        ? 'All'
+        : `All except ${String(state.refs.length - selectedBranchRefs.length)}`
+      : summarizeFilterValues(selectedBranchRefs.map((ref) => ref.shortName));
+  const authorFilterValue = summarizeFilterValues(state.filters.authors);
+  const dateFilterValue = describeDateFilter(state.filters.dateFrom, state.filters.dateTo);
+  const pathFilterValue = summarizeFilterValues(state.filters.paths);
+  const branchFilterQuery = filterPopup === 'branch' ? filterSearch.trim().toLocaleLowerCase() : '';
+  const branchFilterRefs = branchFilterQuery
+    ? state.refs.filter((ref) => ref.shortName.toLocaleLowerCase().includes(branchFilterQuery))
+    : state.refs;
+  const showBranchCommits = (ref: RefLabel, direction: LogCompare['direction']): void => {
+    applyFilters({
+      ...state.filters,
+      allBranches: false,
+      branches: [],
+      compare: { ref: ref.fullName, direction },
+    });
+    setFilterPopup(undefined);
+    setContextMenu(undefined);
+  };
+  const selectOnlyBranch = (ref: RefLabel): void => {
+    applyFilters({ ...state.filters, allBranches: false, branches: [ref.fullName], compare: undefined });
+    setFilterPopup(undefined);
+  };
   const visibleCommitRevealTarget =
     !state.history && commitRevealTarget?.repositoryId === state.selectedRepositoryId
       ? commitRevealTarget
@@ -2270,50 +2326,91 @@ export function App() {
             }}
           />
         </label>
-        <button
-          type="button"
-          data-popup-trigger="true"
-          className={state.filters.allBranches || branchFilterCount ? 'filter-active' : ''}
-          onClick={() => {
-            setContextMenu(undefined);
-            setFilterPopup((current) => (current === 'branch' ? undefined : 'branch'));
-          }}
-        >
-          Branch{branchFilterCount ? ` (${String(branchFilterCount)})` : ''}
-        </button>
-        <button
-          type="button"
-          data-popup-trigger="true"
-          className={state.filters.authors.length ? 'filter-active' : ''}
-          onClick={() => {
-            setContextMenu(undefined);
-            setFilterPopup((current) => (current === 'user' ? undefined : 'user'));
-          }}
-        >
-          User{state.filters.authors.length ? ` (${String(state.filters.authors.length)})` : ''}
-        </button>
-        <button
-          type="button"
-          data-popup-trigger="true"
-          className={state.filters.dateFrom || state.filters.dateTo ? 'filter-active' : ''}
-          onClick={() => {
-            setContextMenu(undefined);
-            setFilterPopup((current) => (current === 'date' ? undefined : 'date'));
-          }}
-        >
-          Date
-        </button>
-        <button
-          type="button"
-          data-popup-trigger="true"
-          className={state.filters.paths.length ? 'filter-active' : ''}
-          onClick={() => {
-            setContextMenu(undefined);
-            setFilterPopup((current) => (current === 'paths' ? undefined : 'paths'));
-          }}
-        >
-          Paths{state.filters.paths.length ? ` (${String(state.filters.paths.length)})` : ''}
-        </button>
+        {(
+          [
+            {
+              kind: 'branch',
+              name: 'Branch',
+              value: branchFilterValue,
+              clear: (filters) => ({ ...filters, allBranches: false, branches: [], compare: undefined }),
+            },
+            { kind: 'user', name: 'User', value: authorFilterValue, clear: (filters) => ({ ...filters, authors: [] }) },
+            {
+              kind: 'date',
+              name: 'Date',
+              value: dateFilterValue,
+              clear: (filters) => {
+                const next = { ...filters };
+                delete next.dateFrom;
+                delete next.dateTo;
+                return next;
+              },
+            },
+            { kind: 'paths', name: 'Paths', value: pathFilterValue, clear: (filters) => ({ ...filters, paths: [] }) },
+          ] satisfies {
+            kind: NonNullable<typeof filterPopup>;
+            name: string;
+            value: string;
+            clear: (filters: LogFilters) => LogFilters;
+          }[]
+        ).map((filter) => (
+          <span className={`filter-chip${filter.value ? ' filter-active' : ''}`} key={filter.kind}>
+            <button
+              type="button"
+              data-popup-trigger="true"
+              aria-label={filter.value ? `${filter.name}: ${filter.value}` : filter.name}
+              aria-expanded={filterPopup === filter.kind}
+              title={filter.value ? `${filter.name}: ${filter.value}` : `Filter by ${filter.name.toLowerCase()}`}
+              onClick={() => {
+                setContextMenu(undefined);
+                setFilterSearch('');
+                setFilterPopup((current) => (current === filter.kind ? undefined : filter.kind));
+              }}
+            >
+              {filter.name}
+              {filter.value ? (
+                <>
+                  : <strong className="filter-chip-value">{filter.value}</strong>
+                </>
+              ) : null}
+              <span className="filter-chip-chevron" aria-hidden="true">
+                ▾
+              </span>
+            </button>
+            {filter.kind === 'branch' && state.filters.compare ? (
+              <button
+                type="button"
+                className="filter-chip-action"
+                aria-label="Swap comparison direction"
+                title="Swap: show the commits on the other side"
+                onClick={() => {
+                  const compare = state.filters.compare;
+                  if (!compare) return;
+                  applyFilters({
+                    ...state.filters,
+                    compare: { ...compare, direction: compare.direction === 'notInHead' ? 'onlyInHead' : 'notInHead' },
+                  });
+                }}
+              >
+                ⇄
+              </button>
+            ) : null}
+            {filter.value ? (
+              <button
+                type="button"
+                className="filter-chip-action"
+                aria-label={`Clear ${filter.name.toLowerCase()} filter`}
+                title={`Clear ${filter.name.toLowerCase()} filter`}
+                onClick={() => {
+                  applyFilters(filter.clear(state.filters));
+                  if (filterPopup === filter.kind) setFilterPopup(undefined);
+                }}
+              >
+                ×
+              </button>
+            ) : null}
+          </span>
+        ))}
         {filterPopup ? (
           <div
             className={`filter-popover filter-${filterPopup}`}
@@ -2323,65 +2420,166 @@ export function App() {
           >
             {filterPopup === 'branch' ? (
               <>
-                <div className="filter-popover-title">Branches</div>
-                <label className="filter-option">
-                  <input
-                    type="checkbox"
-                    checked={allBranchRefsSelected}
-                    disabled={!state.refs.length}
-                    onChange={() => {
-                      applyFilters({
-                        ...state.filters,
-                        allBranches: !allBranchRefsSelected,
-                        branches: [],
-                      });
-                    }}
-                  />
-                  <span>All</span>
-                </label>
-                <label className="filter-option">
-                  <input
-                    type="checkbox"
-                    checked={!state.filters.allBranches && !state.filters.branches.length}
-                    disabled={!selectedRepository?.head}
-                    onChange={() => applyFilters({ ...state.filters, allBranches: false, branches: [] })}
-                  />
-                  <span>HEAD (local)</span>
-                </label>
-                {state.refs.length ? (
-                  state.refs.map((ref) => (
-                    <label className="filter-option" key={ref.fullName}>
+                <input
+                  className="filter-search"
+                  type="search"
+                  aria-label="Search branches"
+                  placeholder="Search branches"
+                  autoFocus
+                  value={filterSearch}
+                  onChange={(event) => setFilterSearch(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && branchFilterRefs[0]) {
+                      event.preventDefault();
+                      selectOnlyBranch(branchFilterRefs[0]);
+                    } else if (event.key === 'Escape') {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      if (filterSearch) setFilterSearch('');
+                      else setFilterPopup(undefined);
+                    }
+                  }}
+                />
+                {branchFilterQuery ? null : (
+                  <>
+                    <label className="filter-option">
                       <input
                         type="checkbox"
-                        checked={state.filters.allBranches
-                          ? !state.filters.branches.includes(ref.fullName)
-                          : state.filters.branches.includes(ref.fullName)}
+                        checked={allBranchRefsSelected && !state.filters.compare}
+                        disabled={!state.refs.length}
                         onChange={() => {
-                          const branches = state.filters.branches.includes(ref.fullName)
-                            ? state.filters.branches.filter((branch) => branch !== ref.fullName)
-                            : [...state.filters.branches, ref.fullName];
-                          const allBranches = Boolean(
-                            state.filters.allBranches && branches.length < state.refs.length,
-                          );
                           applyFilters({
                             ...state.filters,
-                            allBranches,
-                            branches: state.filters.allBranches && !allBranches ? [] : branches,
+                            allBranches: !allBranchRefsSelected || Boolean(state.filters.compare),
+                            branches: [],
+                            compare: undefined,
                           });
                         }}
                       />
-                      <span>{ref.shortName}</span>
+                      <span>All</span>
                     </label>
-                  ))
-                ) : (
-                  <span className="filter-empty">No refs loaded</span>
+                    <label className="filter-option">
+                      <input
+                        type="checkbox"
+                        checked={!state.filters.allBranches && !state.filters.branches.length && !state.filters.compare}
+                        disabled={!selectedRepository?.head}
+                        onChange={() =>
+                          applyFilters({ ...state.filters, allBranches: false, branches: [], compare: undefined })
+                        }
+                      />
+                      <span>HEAD (local)</span>
+                    </label>
+                  </>
+                )}
+                {refGroups.map(({ label, kind }) => {
+                  const refs = branchFilterRefs.filter((ref) => ref.kind === kind);
+                  if (!refs.length) return null;
+                  return (
+                    <div className="filter-group" key={kind} role="group" aria-label={label}>
+                      <div className="filter-popover-title">{label}</div>
+                      {refs.map((ref) => {
+                        const checked = state.filters.compare
+                          ? false
+                          : state.filters.allBranches
+                            ? !state.filters.branches.includes(ref.fullName)
+                            : state.filters.branches.includes(ref.fullName);
+                        return (
+                          <div
+                            className={`filter-option branch-filter-option${state.filters.compare?.ref === ref.fullName ? ' compared' : ''}`}
+                            key={ref.fullName}
+                          >
+                            <input
+                              type="checkbox"
+                              aria-label={ref.shortName}
+                              title="Add to the selection"
+                              checked={checked}
+                              onChange={() => {
+                                const base = state.filters.compare ? [] : state.filters.branches;
+                                const branches = base.includes(ref.fullName)
+                                  ? base.filter((branch) => branch !== ref.fullName)
+                                  : [...base, ref.fullName];
+                                const allBranches = Boolean(
+                                  !state.filters.compare &&
+                                    state.filters.allBranches &&
+                                    branches.length < state.refs.length,
+                                );
+                                applyFilters({
+                                  ...state.filters,
+                                  allBranches,
+                                  branches: state.filters.allBranches && !allBranches ? [] : branches,
+                                  compare: undefined,
+                                });
+                              }}
+                            />
+                            <button
+                              type="button"
+                              className="branch-filter-name"
+                              title={`Show only ${ref.shortName}`}
+                              onClick={() => selectOnlyBranch(ref)}
+                            >
+                              {ref.isCurrent ? <span className="branch-filter-current">● </span> : null}
+                              {ref.shortName}
+                            </button>
+                            {ref.isCurrent || ref.target === selectedRepository?.head ? null : (
+                              <span className="branch-filter-compare">
+                                <button
+                                  type="button"
+                                  title={`Commits in ${ref.shortName} that are not in ${currentBranchLabel} (${currentBranchLabel}..${ref.shortName})`}
+                                  aria-label={`Commits in ${ref.shortName} not in ${currentBranchLabel}`}
+                                  onClick={() => showBranchCommits(ref, 'notInHead')}
+                                >
+                                  ←
+                                </button>
+                                <button
+                                  type="button"
+                                  title={`Commits in ${currentBranchLabel} that are not in ${ref.shortName} (${ref.shortName}..${currentBranchLabel})`}
+                                  aria-label={`Commits in ${currentBranchLabel} not in ${ref.shortName}`}
+                                  onClick={() => showBranchCommits(ref, 'onlyInHead')}
+                                >
+                                  →
+                                </button>
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+                {state.refs.length && !branchFilterRefs.length ? (
+                  <span className="filter-empty">No matching branches</span>
+                ) : null}
+                {state.refs.length ? null : <span className="filter-empty">No refs loaded</span>}
+                {branchFilterQuery ? null : (
+                  <div className="filter-hint">
+                    Click a name to show only that branch, tick boxes to combine several. ← / → compare with{' '}
+                    {currentBranchLabel}.
+                  </div>
                 )}
               </>
             ) : null}
             {filterPopup === 'user' ? (
               <>
+                <input
+                  className="filter-search"
+                  type="search"
+                  aria-label="Search authors"
+                  placeholder="Search authors"
+                  autoFocus
+                  value={filterSearch}
+                  onChange={(event) => setFilterSearch(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Escape') return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (filterSearch) setFilterSearch('');
+                    else setFilterPopup(undefined);
+                  }}
+                />
                 <div className="filter-popover-title">Authors</div>
-                {authorFilterOptions.map((author) => (
+                {authorFilterOptions
+                  .filter((author) => author.label.toLocaleLowerCase().includes(filterSearch.trim().toLocaleLowerCase()))
+                  .map((author) => (
                   <label className="filter-option" key={author.key}>
                     <input
                       type="checkbox"
@@ -4107,6 +4305,24 @@ export function App() {
                 onClick={() => openCommitComparison(contextMenu.ref.target, 'current')}
               >
                 Compare with Current
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!selectedRepository?.head || selectedRepository.head === contextMenu.ref.target}
+                title={`List the commits in ${contextMenu.ref.shortName} that ${currentBranchLabel} does not have`}
+                onClick={() => showBranchCommits(contextMenu.ref, 'notInHead')}
+              >
+                Show Commits Not in {currentBranchLabel}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!selectedRepository?.head || selectedRepository.head === contextMenu.ref.target}
+                title={`List the commits in ${currentBranchLabel} that ${contextMenu.ref.shortName} does not have`}
+                onClick={() => showBranchCommits(contextMenu.ref, 'onlyInHead')}
+              >
+                Show {currentBranchLabel} Commits Not in This Branch
               </button>
               <button
                 type="button"

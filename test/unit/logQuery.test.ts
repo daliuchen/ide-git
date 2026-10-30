@@ -67,4 +67,23 @@ describe('buildLogArguments', () => {
     expect(args).toContain('--extended-regexp');
     expect(args).toContain('--author=A\\+B \\[bot\\] \\(release\\)');
   });
+
+  it('turns a compare filter into a HEAD range that replaces the branch list', async () => {
+    const { buildLogArguments } = await import('../../src/git/logQuery');
+    const base = { text: '', branches: ['refs/heads/other'], authors: [], paths: [] };
+    const notInHead = buildLogArguments({
+      limit: 10,
+      skip: 0,
+      format: 'F',
+      filters: { ...base, compare: { ref: 'refs/heads/feature', direction: 'notInHead' } },
+    });
+    expect(notInHead.slice(-2)).toEqual(['--end-of-options', 'HEAD..refs/heads/feature']);
+    const onlyInHead = buildLogArguments({
+      limit: 10,
+      skip: 0,
+      format: 'F',
+      filters: { ...base, compare: { ref: 'refs/remotes/origin/main', direction: 'onlyInHead' } },
+    });
+    expect(onlyInHead.slice(-2)).toEqual(['--end-of-options', 'refs/remotes/origin/main..HEAD']);
+  });
 });

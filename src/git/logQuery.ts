@@ -1,4 +1,4 @@
-import type { LogFilters } from '../protocol/messages';
+import type { LogCompare, LogFilters } from '../protocol/messages';
 
 export const EMPTY_LOG_FILTERS: LogFilters = {
   text: '',
@@ -17,6 +17,12 @@ export interface BuildLogArgumentsOptions {
 
 function escapeExtendedRegexp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
+
+/** The revision range for a compare filter, e.g. `HEAD..refs/heads/feature`. */
+export function compareRange(compare: LogCompare): { include: string; exclude: string; range: string } {
+  const [include, exclude] = compare.direction === 'notInHead' ? [compare.ref, 'HEAD'] : ['HEAD', compare.ref];
+  return { include, exclude, range: `${exclude}..${include}` };
 }
 
 export function buildLogArguments(options: BuildLogArgumentsOptions): string[] {
@@ -60,7 +66,8 @@ export function buildLogArguments(options: BuildLogArgumentsOptions): string[] {
     args.push(`--until=@${String(Math.trunc(options.filters.dateTo))}`);
   }
 
-  if (options.filters.branches.length) args.push('--end-of-options', ...options.filters.branches);
+  if (options.filters.compare) args.push('--end-of-options', compareRange(options.filters.compare).range);
+  else if (options.filters.branches.length) args.push('--end-of-options', ...options.filters.branches);
   else args.push('--end-of-options', 'HEAD');
 
   if (options.filters.paths.length) args.push('--', ...options.filters.paths);

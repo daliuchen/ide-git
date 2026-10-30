@@ -24,10 +24,20 @@ export interface LogFilters {
   /** When true, branches contains exclusions from all local, remote, and tag refs. */
   allBranches?: boolean;
   branches: string[];
+  /**
+   * Compare a ref with HEAD: `notInHead` lists commits reachable from `ref` but not from HEAD
+   * (`HEAD..ref`), `onlyInHead` the reverse (`ref..HEAD`). Takes precedence over `branches`.
+   */
+  compare?: LogCompare | undefined;
   authors: string[];
   dateFrom?: number;
   dateTo?: number;
   paths: string[];
+}
+
+export interface LogCompare {
+  ref: string;
+  direction: 'notInHead' | 'onlyInHead';
 }
 
 export interface WorkbenchLayout {
@@ -426,6 +436,11 @@ function isFilters(value: unknown): value is LogFilters {
         /^refs\/(heads|remotes|tags)\//u.test(item) &&
         !item.startsWith('-'),
     ) &&
+    (value.compare === undefined ||
+      (isRecord(value.compare) &&
+        isFilterText(value.compare.ref, MAX_FILTER_ITEM_LENGTH) &&
+        /^refs\/(heads|remotes|tags)\//u.test(value.compare.ref) &&
+        (value.compare.direction === 'notInHead' || value.compare.direction === 'onlyInHead'))) &&
     isFilterArray(value.authors, (item) => isFilterText(item, MAX_FILTER_ITEM_LENGTH)) &&
     isFilterArray(
       value.paths,

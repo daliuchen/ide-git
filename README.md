@@ -84,6 +84,8 @@ Open the **Git Log** tab in the bottom panel (`Git Log: Open Log`). Right-click 
 | Jump from a read-only old version to the real file | Press **F4** (or the toolbar button in the diff) |
 | See who changed each line | Editor right-click → *Git Log → Annotate with Git Blame* |
 | Switch / create / delete branches | `Git Log: Branches…` |
+| Search the log by branch | Log → **Branch** filter → type to search, click a name to show only that branch |
+| See what a branch has that mine doesn't (or the reverse) | Log → **Branch** filter → hover the branch → **←** (`HEAD..branch`) or **→** (`branch..HEAD`); ⇄ on the filter swaps. Also in the branch context menu: *Show Commits Not in ‹current›* |
 
 ## Features
 

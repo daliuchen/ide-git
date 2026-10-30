@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { GitCommandError, type GitRunner } from './GitRunner';
-import { buildLogArguments, EMPTY_LOG_FILTERS } from './logQuery';
+import { buildLogArguments, compareRange, EMPTY_LOG_FILTERS } from './logQuery';
 import { parseCommitDetails } from './parsers/parseCommitDetails';
 import { applyNumstat, parseNameStatus } from './parsers/parseChangedFiles';
 import { parseLog, parseSearchableLog } from './parsers/parseLog';
@@ -74,6 +74,7 @@ function limitGraphParentsToVisibleCommits(commits: readonly CommitSummary[]): C
 
 function filtersMayHideAncestors(filters: LogFilters): boolean {
   return Boolean(
+    filters.compare ||
     filters.authors.length ||
       filters.paths.length ||
       filters.dateFrom !== undefined ||
@@ -589,6 +590,7 @@ export class GitService {
       cwd,
       filters.text.trim().toLowerCase(),
       filters.branches,
+      filters.compare ?? null,
       filters.authors,
       filters.paths,
       filters.dateFrom ?? null,
@@ -665,7 +667,9 @@ export class GitService {
   async getLog(cwd: string, query: LogQuery): Promise<CommitSummary[]> {
     validatePage(query);
     const requestedFilters = query.filters ?? EMPTY_LOG_FILTERS;
-    const filters = requestedFilters.allBranches
+    const filters = requestedFilters.compare
+      ? { ...requestedFilters, allBranches: false, branches: [] }
+      : requestedFilters.allBranches
       ? {
           ...requestedFilters,
           allBranches: false,
@@ -676,9 +680,10 @@ export class GitService {
       : requestedFilters;
     if (requestedFilters.allBranches && !filters.branches.length) return [];
     const refsByTarget = indexRefsByTarget(query.refs);
-    if (filters.branches.length) {
+    if (filters.branches.length || filters.compare) {
       const knownRefs = new Set(query.refs.map((ref) => ref.fullName));
-      const unknownBranch = filters.branches.find((branch) => !knownRefs.has(branch));
+      const unknownBranch = [...filters.branches, ...(filters.compare ? [filters.compare.ref] : [])]
+        .find((branch) => !knownRefs.has(branch));
       if (unknownBranch) throw new Error(`Unknown branch filter: ${unknownBranch}`);
     }
 
@@ -715,26 +720,28 @@ export class GitService {
         }
 
         if (resolvedHash) {
-          if (filters.branches.length) {
-            const containment = await Promise.all(
-              filters.branches.map(async (branch) => {
-                try {
-                  await this.runner.run(['merge-base', '--is-ancestor', resolvedHash, branch], {
-                    cwd,
-                    ...(query.signal ? { signal: query.signal } : {}),
-                    timeoutMs: 30_000,
-                  });
-                  return true;
-                } catch (error) {
-                  if (error instanceof GitCommandError && !error.cancelled) return false;
-                  throw error;
-                }
-              }),
-            );
+          const isAncestor = async (branch: string): Promise<boolean> => {
+            try {
+              await this.runner.run(['merge-base', '--is-ancestor', resolvedHash, branch], {
+                cwd,
+                ...(query.signal ? { signal: query.signal } : {}),
+                timeoutMs: 30_000,
+              });
+              return true;
+            } catch (error) {
+              if (error instanceof GitCommandError && !error.cancelled) return false;
+              throw error;
+            }
+          };
+          if (filters.compare) {
+            const { include, exclude } = compareRange(filters.compare);
+            if (!(await isAncestor(include)) || (await isAncestor(exclude))) return [];
+          } else if (filters.branches.length) {
+            const containment = await Promise.all(filters.branches.map(isAncestor));
             if (!containment.some(Boolean)) return [];
           }
 
-          const hashFilters: LogFilters = { ...filters, text: '', branches: [] };
+          const hashFilters: LogFilters = { ...filters, text: '', branches: [], compare: undefined };
           const args = buildLogArguments({
             limit: 1,
             skip: 0,

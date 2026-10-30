@@ -3123,7 +3123,7 @@ describe('WorkbenchApp', () => {
         },
       }));
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Branch (1)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Branch: main' }));
     const popup = screen.getByRole('dialog', { name: 'branch filter' });
     const selectAll = within(popup).getByRole('checkbox', { name: 'All' });
     expect(selectAll).not.toBeChecked();
@@ -3146,6 +3146,58 @@ describe('WorkbenchApp', () => {
       type: 'updateFilters', filters: { ...filters, branches: [] },
     });
     expect(selectAll).not.toBeChecked();
+  });
+
+  it('searches branches, shows one branch on click, and compares a branch with HEAD', () => {
+    const { commits, newest } = initializeCommitRangeFixture();
+    const older = commits.at(-1)?.hash ?? newest;
+    const refs = [
+      { fullName: 'refs/heads/main', shortName: 'main', kind: 'local', isCurrent: true, target: newest },
+      { fullName: 'refs/heads/feature/login', shortName: 'feature/login', kind: 'local', isCurrent: false, target: older },
+      { fullName: 'refs/remotes/origin/release', shortName: 'origin/release', kind: 'remote', isCurrent: false, target: older },
+    ].map((ref) => ({ ...ref, ahead: 0, behind: 0 }));
+    const filters = { text: '', branches: [], authors: [], paths: [] };
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: {
+          type: 'repositoryData', requestId: 'branch-search', repositoryId: 'repo-commit-range',
+          refs, commits, filters, replace: true, hasMore: false,
+        },
+      }));
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
+    let popup = screen.getByRole('dialog', { name: 'branch filter' });
+    fireEvent.change(within(popup).getByRole('searchbox', { name: 'Search branches' }), { target: { value: 'login' } });
+    expect(within(popup).queryByRole('checkbox', { name: 'origin/release' })).not.toBeInTheDocument();
+    fireEvent.click(within(popup).getByRole('button', { name: 'feature/login' }));
+    expect(postedMessages.at(-1)).toMatchObject({
+      type: 'updateFilters', filters: { ...filters, branches: ['refs/heads/feature/login'] },
+    });
+    expect(screen.queryByRole('dialog', { name: 'branch filter' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Branch: feature/login' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Branch: feature/login' }));
+    popup = screen.getByRole('dialog', { name: 'branch filter' });
+    fireEvent.click(within(popup).getByRole('button', { name: /^Commits in origin\/release not in / }));
+    expect(postedMessages.at(-1)).toMatchObject({
+      type: 'updateFilters',
+      filters: { branches: [], compare: { ref: 'refs/remotes/origin/release', direction: 'notInHead' } },
+    });
+    const chip = screen.getByRole('button', { name: /^Branch: .+\.\.origin\/release$/ });
+    expect(chip).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Swap comparison direction' }));
+    expect(postedMessages.at(-1)).toMatchObject({
+      filters: { compare: { ref: 'refs/remotes/origin/release', direction: 'onlyInHead' } },
+    });
+    expect(screen.getByRole('button', { name: /^Branch: origin\/release\.\./ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear branch filter' }));
+    const cleared = postedMessages.at(-1) as { filters: { compare?: unknown; branches: string[] } };
+    expect(cleared.filters.compare).toBeUndefined();
+    expect(cleared.filters.branches).toEqual([]);
+    expect(screen.getByRole('button', { name: 'Branch' })).toBeInTheDocument();
   });
 
   it.each([100, 101, 200])('sends valid All filters for %s refs, including after deselecting one', (count) => {

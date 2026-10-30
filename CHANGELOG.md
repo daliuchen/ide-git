@@ -4,6 +4,10 @@ All notable changes to Git Log are documented in this file.
 
 ## 0.3.0
 
+- Log filter bar: each filter shows its value (`Branch: feature/x`, `User: Alice`, `Date: since …`) with a × to clear it.
+- Branch filter: search box, grouped Local / Remote / Tags, click a name to show only that branch (checkboxes still combine several).
+- Compare a branch with the current one: ← / → in the Branch filter, or *Show Commits Not in ‹current›* in the branch context menu, lists `HEAD..branch` or `branch..HEAD`; ⇄ swaps the direction.
+- User filter search box.
 - Hover tooltips for toolbar buttons and other controls in the Commit window, Log and dialogs (native tooltips do not show inside webviews in Cursor).
 - Line-level partial commits: expand a chunk and choose individual added or removed lines.
 - Chunk-level changelists: move a chunk to another changelist; a split file appears in each one.
