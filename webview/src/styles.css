@@ -307,33 +307,6 @@ select:focus-visible,
   color: var(--vscode-gitDecoration-addedResourceForeground, #73c991);
 }
 
-.branch-filter-compare {
-  display: inline-flex;
-  gap: 2px;
-  visibility: hidden;
-}
-
-.branch-filter-option:hover .branch-filter-compare,
-.branch-filter-option:focus-within .branch-filter-compare,
-.branch-filter-option.compared .branch-filter-compare {
-  visibility: visible;
-}
-
-.branch-filter-compare button {
-  width: 22px;
-  height: 20px;
-  padding: 0;
-  border: 1px solid var(--vscode-widget-border, transparent);
-  border-radius: 3px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}
-
-.branch-filter-compare button:hover {
-  background: var(--vscode-toolbar-hoverBackground);
-}
-
 .branch-filter-option.compared {
   background: var(--vscode-list-inactiveSelectionBackground);
 }

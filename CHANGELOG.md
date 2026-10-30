@@ -6,7 +6,8 @@ All notable changes to Git Log are documented in this file.
 
 - Log filter bar: each filter shows its value (`Branch: feature/x`, `User: Alice`, `Date: since …`) with a × to clear it.
 - Branch filter: search box, grouped Local / Remote / Tags, click a name to show only that branch (checkboxes still combine several).
-- Compare a branch with the current one: ← / → in the Branch filter, or *Show Commits Not in ‹current›* in the branch context menu, lists `HEAD..branch` or `branch..HEAD`; ⇄ swaps the direction.
+- Compare with Current (branch context menu in the Log, and the Branches popup) lists the commits in that branch missing from the current one (`HEAD..branch`); ⇄ on the Branch filter swaps to `branch..HEAD`. The old file comparison is now *Show Diff with Current*.
+- The collapse/expand buttons for the Branches and Changed Files panes moved into the ⋮ menu.
 - User filter search box.
 - Hover tooltips for toolbar buttons and other controls in the Commit window, Log and dialogs (native tooltips do not show inside webviews in Cursor).
 - Line-level partial commits: expand a chunk and choose individual added or removed lines.

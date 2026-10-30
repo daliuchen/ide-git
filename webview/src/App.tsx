@@ -2520,26 +2520,6 @@ export function App() {
                               {ref.isCurrent ? <span className="branch-filter-current">● </span> : null}
                               {ref.shortName}
                             </button>
-                            {ref.isCurrent || ref.target === selectedRepository?.head ? null : (
-                              <span className="branch-filter-compare">
-                                <button
-                                  type="button"
-                                  title={`Commits in ${ref.shortName} that are not in ${currentBranchLabel} (${currentBranchLabel}..${ref.shortName})`}
-                                  aria-label={`Commits in ${ref.shortName} not in ${currentBranchLabel}`}
-                                  onClick={() => showBranchCommits(ref, 'notInHead')}
-                                >
-                                  ←
-                                </button>
-                                <button
-                                  type="button"
-                                  title={`Commits in ${currentBranchLabel} that are not in ${ref.shortName} (${ref.shortName}..${currentBranchLabel})`}
-                                  aria-label={`Commits in ${currentBranchLabel} not in ${ref.shortName}`}
-                                  onClick={() => showBranchCommits(ref, 'onlyInHead')}
-                                >
-                                  →
-                                </button>
-                              </span>
-                            )}
                           </div>
                         );
                       })}
@@ -2552,8 +2532,7 @@ export function App() {
                 {state.refs.length ? null : <span className="filter-empty">No refs loaded</span>}
                 {branchFilterQuery ? null : (
                   <div className="filter-hint">
-                    Click a name to show only that branch, tick boxes to combine several. ← / → compare with{' '}
-                    {currentBranchLabel}.
+                    Click a name to show only that branch, tick boxes to combine several.
                   </div>
                 )}
               </>
@@ -2785,38 +2764,20 @@ export function App() {
         </button>
         <button
           type="button"
-          aria-label={`${refsCollapsed ? 'Expand' : 'Collapse'} references pane`}
-          title={`${refsCollapsed ? 'Expand' : 'Collapse'} references pane`}
-          onClick={() => toggleResponsivePane('refs')}
-        >
-          ⇤
-        </button>
-        <button
-          type="button"
-          aria-label={`${filesCollapsed ? 'Expand' : 'Collapse'} changed files pane`}
-          title={`${filesCollapsed ? 'Expand' : 'Collapse'} changed files pane`}
-          onClick={() => toggleResponsivePane('files')}
-        >
-          ⇥
-        </button>
-        <button
-          type="button"
           data-popup-trigger="true"
           aria-label="More actions"
           title="More Git actions"
           aria-haspopup="menu"
           aria-expanded={contextMenu?.kind === 'toolbar'}
-          disabled={!state.selectedRepositoryId || selectedRepository?.isBare}
           onClick={(event) => {
             const bounds = event.currentTarget.getBoundingClientRect();
-            if (!state.selectedRepositoryId) return;
             setFilterPopup(undefined);
             setContextMenu((current) =>
               current?.kind === 'toolbar'
                 ? undefined
                 : {
                     kind: 'toolbar',
-                    repositoryId: state.selectedRepositoryId as string,
+                    repositoryId: state.selectedRepositoryId ?? '',
                     x: bounds.right,
                     y: bounds.bottom + 2,
                   },
@@ -3667,7 +3628,15 @@ export function App() {
           }}
         >
           {contextMenu.kind === 'toolbar' ? (
-            selectedRepository?.operationState ? (
+            <>
+            <button type="button" role="menuitem" onClick={() => toggleResponsivePane('refs')}>
+              {refsCollapsed ? 'Expand' : 'Collapse'} references pane
+            </button>
+            <button type="button" role="menuitem" onClick={() => toggleResponsivePane('files')}>
+              {filesCollapsed ? 'Expand' : 'Collapse'} changed files pane
+            </button>
+            {selectedRepository ? <div className="context-menu-separator" role="separator" /> : null}
+            {!selectedRepository ? null : selectedRepository.operationState ? (
               <span className="menu-note">
                 Git {selectedRepository.operationState} is in progress. Finish or abort it first.
               </span>
@@ -3739,7 +3708,8 @@ export function App() {
                 Force Push with Lease…
               </button>
               </>
-            )
+            )}
+            </>
           ) : null}
           {contextMenu.kind === 'commit' ? (
             <>
@@ -4301,8 +4271,9 @@ export function App() {
               <button
                 type="button"
                 role="menuitem"
-                disabled={!selectedRepository?.head || selectedRepository.head === contextMenu.ref.target}
-                onClick={() => openCommitComparison(contextMenu.ref.target, 'current')}
+                disabled={!selectedRepository?.head || contextMenu.ref.isCurrent}
+                title={`List the commits in ${contextMenu.ref.shortName} that ${currentBranchLabel} does not have; swap from the Branch filter`}
+                onClick={() => showBranchCommits(contextMenu.ref, 'notInHead')}
               >
                 Compare with Current
               </button>
@@ -4310,19 +4281,10 @@ export function App() {
                 type="button"
                 role="menuitem"
                 disabled={!selectedRepository?.head || selectedRepository.head === contextMenu.ref.target}
-                title={`List the commits in ${contextMenu.ref.shortName} that ${currentBranchLabel} does not have`}
-                onClick={() => showBranchCommits(contextMenu.ref, 'notInHead')}
+                title={`Files that differ between ${contextMenu.ref.shortName} and ${currentBranchLabel}`}
+                onClick={() => openCommitComparison(contextMenu.ref.target, 'current')}
               >
-                Show Commits Not in {currentBranchLabel}
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                disabled={!selectedRepository?.head || selectedRepository.head === contextMenu.ref.target}
-                title={`List the commits in ${currentBranchLabel} that ${contextMenu.ref.shortName} does not have`}
-                onClick={() => showBranchCommits(contextMenu.ref, 'onlyInHead')}
-              >
-                Show {currentBranchLabel} Commits Not in This Branch
+                Show Diff with Current
               </button>
               <button
                 type="button"

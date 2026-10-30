@@ -490,7 +490,12 @@ export function activate(context: vscode.ExtensionContext): void {
     openRebaseDialog: (target: RepositorySummary, hash: string, mode: 'interactive' | 'reword') =>
       dialogs.openRebase(target, hash, mode),
   };
-  const branchesPopup = new BranchesPopup(runner, operationService, (repository) => dialogs.openPush(repository));
+  const branchesPopup = new BranchesPopup(
+    runner,
+    operationService,
+    (repository) => dialogs.openPush(repository),
+    (repository, ref) => workbenchProvider.showBranchComparison(repository.id, ref),
+  );
   const branchesCommand = vscode.commands.registerCommand('gitLogWorkbench.branches', async (resource?: unknown) => {
     const repository = await resolveRepository(resource);
     if (repository) await branchesPopup.show(repository);

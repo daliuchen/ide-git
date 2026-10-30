@@ -15,6 +15,7 @@ export class BranchesPopup {
     private readonly runner: GitRunner,
     private readonly operations: GitOperationService,
     private readonly openPush: (repository: RepositorySummary) => Promise<void>,
+    private readonly compareWithCurrent: (repository: RepositorySummary, ref: string) => Promise<void>,
   ) {}
 
   async show(repository: RepositorySummary): Promise<void> {
@@ -72,6 +73,11 @@ export class BranchesPopup {
       if (!branch.current) {
         actions.push(
           { label: `Checkout and Rebase onto '${currentName}'`, run: run({ kind: 'checkoutAndRebase', branch: branch.name }) },
+          {
+            label: `Compare with '${currentName}'`,
+            description: `commits in '${branch.name}' missing from '${currentName}'`,
+            run: () => this.compareWithCurrent(repository, `refs/heads/${branch.name}`),
+          },
           { label: `Show Diff with Working Tree`, run: () => this.compare(repository, branch.target) },
           { label: `Rebase '${currentName}' onto '${branch.name}'`, run: run({ kind: 'rebase', ref: branch.name }) },
           { label: `Merge '${branch.name}' into '${currentName}'`, run: run({ kind: 'merge', ref: branch.name }) },
@@ -108,6 +114,11 @@ export class BranchesPopup {
           run: run({ kind: 'checkoutRemote', name: remoteBranch, startPoint: branch.name }),
         },
         { label: `New Branch from '${branch.name}'…`, run: () => this.newBranch(repository, branch.name) },
+        {
+          label: `Compare with '${currentName}'`,
+          description: `commits in '${branch.name}' missing from '${currentName}'`,
+          run: () => this.compareWithCurrent(repository, `refs/remotes/${branch.name}`),
+        },
         { label: `Show Diff with Working Tree`, run: () => this.compare(repository, branch.target) },
         { label: `Rebase '${currentName}' onto '${branch.name}'`, run: run({ kind: 'rebase', ref: branch.name }) },
         { label: `Merge '${branch.name}' into '${currentName}'`, run: run({ kind: 'merge', ref: branch.name }) },

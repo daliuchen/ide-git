@@ -345,8 +345,6 @@ describe('WorkbenchApp', () => {
       'Go to HEAD',
       'Fetch remotes',
       'Manage stashes',
-      'Collapse references pane',
-      'Collapse changed files pane',
       'More actions',
     ]) {
       expect(globalActions).toContainElement(screen.getByRole('button', { name }));
@@ -3148,7 +3146,7 @@ describe('WorkbenchApp', () => {
     expect(selectAll).not.toBeChecked();
   });
 
-  it('searches branches, shows one branch on click, and compares a branch with HEAD', () => {
+  it('searches branches, shows one branch on click, and compares a branch with the current one', () => {
     const { commits, newest } = initializeCommitRangeFixture();
     const older = commits.at(-1)?.hash ?? newest;
     const refs = [
@@ -3167,7 +3165,7 @@ describe('WorkbenchApp', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
-    let popup = screen.getByRole('dialog', { name: 'branch filter' });
+    const popup = screen.getByRole('dialog', { name: 'branch filter' });
     fireEvent.change(within(popup).getByRole('searchbox', { name: 'Search branches' }), { target: { value: 'login' } });
     expect(within(popup).queryByRole('checkbox', { name: 'origin/release' })).not.toBeInTheDocument();
     fireEvent.click(within(popup).getByRole('button', { name: 'feature/login' }));
@@ -3177,9 +3175,8 @@ describe('WorkbenchApp', () => {
     expect(screen.queryByRole('dialog', { name: 'branch filter' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Branch: feature/login' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Branch: feature/login' }));
-    popup = screen.getByRole('dialog', { name: 'branch filter' });
-    fireEvent.click(within(popup).getByRole('button', { name: /^Commits in origin\/release not in / }));
+    fireEvent.contextMenu(screen.getByTitle('refs/remotes/origin/release'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Compare with Current' }));
     expect(postedMessages.at(-1)).toMatchObject({
       type: 'updateFilters',
       filters: { branches: [], compare: { ref: 'refs/remotes/origin/release', direction: 'notInHead' } },
@@ -4072,13 +4069,15 @@ describe('WorkbenchApp', () => {
     });
 
     postedMessages.length = 0;
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse references pane' }));
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Collapse references pane' }));
     expect(screen.queryByRole('navigation', { name: 'Git references' })).not.toBeInTheDocument();
     expect(postedMessages.at(-1)).toMatchObject({
       type: 'updateLayout',
       layout: expect.objectContaining({ refsCollapsed: true }),
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse changed files pane' }));
+    if (!screen.queryByRole('menu')) fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Collapse changed files pane' }));
     expect(screen.queryByRole('region', { name: 'Changed files' })).not.toBeInTheDocument();
     expect(postedMessages.at(-1)).toMatchObject({
       type: 'updateLayout',
@@ -4112,7 +4111,8 @@ describe('WorkbenchApp', () => {
       '220px 1px minmax(340px, 1fr) 0px 0px',
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Expand changed files pane' }));
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Expand changed files pane' }));
 
     expect(screen.getByRole('region', { name: 'Changed files' })).toBeInTheDocument();
     expect(screen.getByRole('separator', { name: 'Resize changed files pane' })).toBeInTheDocument();
@@ -5706,8 +5706,6 @@ describe('WorkbenchApp', () => {
       ['Refresh log', 'Refresh local repository state'],
       ['Go to HEAD', 'Locate the current HEAD commit'],
       ['Fetch remotes', 'Fetch from remotes'],
-      ['Collapse references pane', 'Collapse references pane'],
-      ['Collapse changed files pane', 'Collapse changed files pane'],
       ['More actions', 'More Git actions'],
     ]);
     for (const [name, title] of expectedTitles) {

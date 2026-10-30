@@ -565,6 +565,32 @@ export class WorkbenchController {
     }
   }
 
+  /** Show the commits in `ref` that HEAD does not have (`HEAD..ref`) in the Log. */
+  async showBranchComparison(repositoryId: string, ref: string): Promise<void> {
+    this.requireRepository(repositoryId);
+    if (!/^refs\/(heads|remotes|tags)\//u.test(ref)) throw new Error(`Invalid branch: ${ref}`);
+    this.selectedRepositoryId = repositoryId;
+    const filters = this.filters.get(repositoryId) ?? EMPTY_LOG_FILTERS;
+    this.filters.set(repositoryId, {
+      ...cloneFilters(filters),
+      allBranches: false,
+      branches: [],
+      compare: { ref, direction: 'notInHead' },
+    });
+    this.scrollTops.set(repositoryId, 0);
+    this.logOffsets.set(repositoryId, 0);
+    this.graphContinuations.delete(repositoryId);
+    await this.persistWorkbenchState();
+    const logSequence = ++this.logRequestSequence;
+    await this.loadRepository(
+      repositoryId,
+      `branch-comparison-${String(++this.automaticRequestSequence)}`,
+      true,
+      0,
+      logSequence,
+    );
+  }
+
   async openFolderHistory(request: FolderHistoryRequest): Promise<void> {
     if (!request.path || request.path.includes('\0')) {
       throw new Error('Invalid folder history path.');
