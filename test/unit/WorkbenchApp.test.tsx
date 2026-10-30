@@ -3190,6 +3190,16 @@ describe('WorkbenchApp', () => {
     });
     expect(screen.getByRole('button', { name: /^Branch: origin\/release\.\./ })).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole('button', { name: 'Branch: origin/release..main' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'branch filter' })).getByRole('button', {
+        name: 'Commits in feature/login not in main',
+      }),
+    );
+    expect(postedMessages.at(-1)).toMatchObject({
+      filters: { compare: { ref: 'refs/heads/feature/login', direction: 'notInHead' } },
+    });
+
     fireEvent.click(screen.getByRole('button', { name: 'Clear branch filter' }));
     const cleared = postedMessages.at(-1) as { filters: { compare?: unknown; branches: string[] } };
     expect(cleared.filters.compare).toBeUndefined();

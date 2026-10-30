@@ -2523,6 +2523,26 @@ export function App() {
                               {ref.isCurrent ? <span className="branch-filter-current">● </span> : null}
                               {ref.shortName}
                             </button>
+                            {ref.isCurrent || ref.target === selectedRepository?.head ? null : (
+                              <span className="branch-filter-compare">
+                                <button
+                                  type="button"
+                                  title={`Commits in ${ref.shortName} that are not in ${currentBranchLabel} (${currentBranchLabel}..${ref.shortName})`}
+                                  aria-label={`Commits in ${ref.shortName} not in ${currentBranchLabel}`}
+                                  onClick={() => showBranchCommits(ref, 'notInHead')}
+                                >
+                                  ←
+                                </button>
+                                <button
+                                  type="button"
+                                  title={`Commits in ${currentBranchLabel} that are not in ${ref.shortName} (${ref.shortName}..${currentBranchLabel})`}
+                                  aria-label={`Commits in ${currentBranchLabel} not in ${ref.shortName}`}
+                                  onClick={() => showBranchCommits(ref, 'onlyInHead')}
+                                >
+                                  →
+                                </button>
+                              </span>
+                            )}
                           </div>
                         );
                       })}
@@ -2535,7 +2555,8 @@ export function App() {
                 {state.refs.length ? null : <span className="filter-empty">No refs loaded</span>}
                 {branchFilterQuery ? null : (
                   <div className="filter-hint">
-                    Click a name to show only that branch, tick boxes to combine several.
+                    Click a name to show only that branch, tick boxes to combine several. ← / → compare with{' '}
+                    {currentBranchLabel}.
                   </div>
                 )}
               </>

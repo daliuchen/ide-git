@@ -85,7 +85,7 @@ cursor --install-extension git-log-plus-0.3.0.vsix   # VS Code 用 code --instal
 | 看每行是谁改的 | 编辑器右键 → *Git Log → Annotate with Git Blame* |
 | 切换 / 新建 / 删除分支 | `Git Log: Branches…` |
 | 按分支筛选 Log | Log → **Branch** 筛选 → 输入搜索，点分支名只看这个分支 |
-| 看某分支有、我当前分支没有的提交（或反过来） | Log 左侧分支列表右键该分支 → **Compare with Current**，或 `Git Log: Branches…` → 选分支 → **Compare with '当前分支'**。Branch 筛选会显示成 `当前分支..该分支`，点 **⇄** 切换方向。想看文件差异用 *Show Diff with Current* |
+| 看某分支有、我当前分支没有的提交（或反过来） | Log 左侧分支列表右键该分支 → **Compare with Current**，或 `Git Log: Branches…` → 选分支 → **Compare with '当前分支'**。也可以打开 **Branch** 筛选，鼠标移到分支上点 **←**（`当前分支..该分支`）或 **→**（`该分支..当前分支`）。Branch 筛选会显示成 `当前分支..该分支`，点 **⇄** 切换方向。想看文件差异用 *Show Diff with Current* |
 
 ## 功能
 

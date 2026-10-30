@@ -85,7 +85,7 @@ Open the **Git Log** tab in the bottom panel (`Git Log: Open Log`). Right-click 
 | See who changed each line | Editor right-click → *Git Log → Annotate with Git Blame* |
 | Switch / create / delete branches | `Git Log: Branches…` |
 | Search the log by branch | Log → **Branch** filter → type to search, click a name to show only that branch |
-| See what a branch has that mine doesn't (or the reverse) | Right-click the branch in the Log's branch list → **Compare with Current**, or `Git Log: Branches…` → branch → **Compare with '‹current›'**. The Branch filter then reads `current..branch`; click **⇄** to swap. *Show Diff with Current* lists the differing files instead |
+| See what a branch has that mine doesn't (or the reverse) | Right-click the branch in the Log's branch list → **Compare with Current**, or `Git Log: Branches…` → branch → **Compare with '‹current›'**. Or open the **Branch** filter, hover the branch and click **←** (`current..branch`) or **→** (`branch..current`). The Branch filter then reads `current..branch`; click **⇄** to swap. *Show Diff with Current* lists the differing files instead |
 
 ## Features
 
