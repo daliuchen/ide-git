@@ -110,7 +110,7 @@ Open the **Git Log** tab in the bottom panel (`Git Log: Open Log`). Right-click 
 - Commits: Edit Commit Message…, Fixup… / Squash Into… (prepares `fixup!` / `squash!` in the Commit window), Undo Commit, Interactively Rebase from Here…, Push All up to Here…, Create Patch…, Compare with Local.
 - Changed files: Compare with Local, Jump to Source, Show History for File, Revert / Cherry-Pick Selected Changes, Get from Revision, Drop Selected Changes… (removes the file's changes from that commit), Create Patch….
 - Branches: Checkout and Rebase onto Current, Rebase Current onto, Merge into Current, Pull into Current Using Rebase/Merge, Update (fast-forward without checkout), Show Diff with Working Tree.
-- Toolbar: Push…, Update Project (Rebase/Merge), Commit….
+- Toolbar: Fetch, Pull, Push…, Stashes; the ⋮ menu has Update Project (Rebase/Merge), Commit… and the pane toggles. Picking a commit brings back a hidden Changed Files pane.
 
 ### Dialogs and popups
 

@@ -110,7 +110,7 @@ cursor --install-extension git-log-plus-0.3.0.vsix   # VS Code 用 code --instal
 - 提交：Edit Commit Message…、Fixup… / Squash Into…（在 Commit 窗口预填 `fixup!` / `squash!`）、Undo Commit、Interactively Rebase from Here…、Push All up to Here…、Create Patch…、Compare with Local。
 - 变更文件：Compare with Local、Jump to Source、Show History for File、Revert / Cherry-Pick Selected Changes、Get from Revision、Drop Selected Changes…（把这个文件的改动从该提交里去掉）、Create Patch…。
 - 分支：Checkout and Rebase onto Current、Rebase Current onto、Merge into Current、Pull into Current Using Rebase/Merge、Update（不切换分支直接快进）、Show Diff with Working Tree。
-- 工具栏：Push…、Update Project（Rebase/Merge）、Commit…。
+- 工具栏：Fetch、Pull、Push…、Stashes；⋮ 菜单里有 Update Project（Rebase/Merge）、Commit… 和收起/展开侧栏。Changed Files 栏被收起时，点一个提交会自动展开。
 
 ### 对话框与弹出菜单
 

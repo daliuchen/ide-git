@@ -1632,6 +1632,8 @@ export function App() {
       return;
     }
     if (!state.selectedRepositoryId) return;
+    // A commit was picked to look at its files: bring back a Changed Files pane hidden earlier.
+    if (state.layout.filesCollapsed) persistLayout({ ...state.layout, filesCollapsed: false });
     let nextSelectedCommitHashes: string[];
     let focusedCommit = commit;
     if (toggle) {
@@ -2741,7 +2743,7 @@ export function App() {
             })
           }
         >
-          ↻
+          <i className="codicon codicon-refresh" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -2750,7 +2752,7 @@ export function App() {
           disabled={!selectedRepository?.head}
           onClick={goToHead}
         >
-          ◎
+          <i className="codicon codicon-target" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -2759,7 +2761,34 @@ export function App() {
           disabled={!state.selectedRepositoryId || selectedRepository?.isBare || selectedOperationInFlight}
           onClick={() => runOperation({ kind: 'fetch' })}
         >
-          ⇣
+          <i className="codicon codicon-repo-fetch" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          aria-label="Pull"
+          title="Pull into the current branch"
+          disabled={
+            !selectedRepository?.currentBranch ||
+            selectedRepository.isBare ||
+            Boolean(selectedRepository.operationState) ||
+            selectedOperationInFlight
+          }
+          onClick={() => runOperation({ kind: 'pull' })}
+        >
+          <i className="codicon codicon-repo-pull" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          aria-label="Push…"
+          title="Push… (review outgoing commits and choose the target branch)"
+          disabled={
+            !selectedRepository?.currentBranch ||
+            selectedRepository.isBare ||
+            Boolean(selectedRepository.operationState)
+          }
+          onClick={() => runWorkbenchCommand({ kind: 'openPushDialog' })}
+        >
+          <i className="codicon codicon-repo-push" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -2784,7 +2813,7 @@ export function App() {
             });
           }}
         >
-          ◫
+          <i className="codicon codicon-archive" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -2808,7 +2837,7 @@ export function App() {
             );
           }}
         >
-          ⋮
+          <i className="codicon codicon-ellipsis" aria-hidden="true" />
         </button>
     </header>
   );

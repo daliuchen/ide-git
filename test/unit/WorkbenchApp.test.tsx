@@ -3921,6 +3921,28 @@ describe('WorkbenchApp', () => {
     ).toEqual(['commit-subject-cell', 'commit-author', 'commit-date', 'commit-refs']);
   });
 
+  it('brings back a hidden Changed Files pane when a commit is picked', () => {
+    initializeCommitRangeFixture();
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Collapse changed files pane' }));
+    expect(screen.queryByRole('region', { name: 'Changed files' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('middle commit').closest('[role="row"]') as HTMLElement);
+    expect(screen.getByRole('region', { name: 'Changed files' })).toBeInTheDocument();
+    expect(postedMessages).toContainEqual(
+      expect.objectContaining({ type: 'updateLayout', layout: expect.objectContaining({ filesCollapsed: false }) }),
+    );
+  });
+
+  it('puts Pull and Push on the toolbar', () => {
+    initializeCommitRangeFixture();
+    const toolbar = screen.getByRole('toolbar', { name: 'Global Git actions' });
+    fireEvent.click(within(toolbar).getByRole('button', { name: 'Pull' }));
+    expect(postedMessages.at(-1)).toMatchObject({ type: 'runOperation', operation: { kind: 'pull' } });
+    fireEvent.click(within(toolbar).getByRole('button', { name: 'Push…' }));
+    expect(postedMessages.at(-1)).toMatchObject({ type: 'workbenchCommand', command: { kind: 'openPushDialog' } });
+  });
+
   it('resizes workbench panes with an accessible separator and persists the layout', () => {
     render(<App />);
     act(() => {

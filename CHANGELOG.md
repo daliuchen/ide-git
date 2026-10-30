@@ -11,6 +11,7 @@ All notable changes to Git Log are documented in this file.
 - The collapse/expand buttons for the Branches and Changed Files panes moved into the ⋮ menu.
 - User filter search box.
 - Filter popups open under the button that was clicked instead of at the right edge.
+- Log toolbar: Pull and Push… buttons next to Fetch, all with editor icons. Picking a commit brings back a Changed Files pane that was collapsed.
 - Hover tooltips for toolbar buttons and other controls in the Commit window, Log and dialogs (native tooltips do not show inside webviews in Cursor).
 - Line-level partial commits: expand a chunk and choose individual added or removed lines.
 - Chunk-level changelists: move a chunk to another changelist; a split file appears in each one.

@@ -41,7 +41,9 @@ const builds = [
     },
     loader: {
       '.svg': 'dataurl',
+      '.ttf': 'file',
     },
+    assetNames: '[name]-[hash]',
   },
   {
     ...shared,
