@@ -135,7 +135,8 @@ describe('extension contributions', () => {
       };
     };
 
-    expect(packageJson.version).toBe('0.3.0');
+    // Releases bump the version; only its shape is checked here.
+    expect(packageJson.version).toMatch(/^\d+\.\d+\.\d+$/u);
     expect(packageJson.contributes?.viewsWelcome).toBeUndefined();
     expect(packageJson.contributes?.viewsContainers?.activitybar).toEqual([
       expect.objectContaining({ id: 'gitLogCommit', title: 'Commit' }),
