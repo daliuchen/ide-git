@@ -15,6 +15,7 @@ import type { RepositoryRegistry } from '../repositories/RepositoryRegistry';
 import { RepositoryWatchManager } from '../repositories/RepositoryWatchManager';
 import type { EditorHistoryRequest, FolderHistoryRequest, RepositorySummary } from '../shared/models';
 import { createWebviewHtml } from './createWebviewHtml';
+import { loadWebview } from './loadWebview';
 import { WorkbenchController } from './WorkbenchController';
 
 const DEFAULT_LAYOUT: WorkbenchLayout = {
@@ -73,12 +74,14 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       vscode.Uri.joinPath(extensionUri, 'dist', 'webview.css'),
     );
 
-    view.webview.html = createWebviewHtml({
-      cspSource: view.webview.cspSource,
-      scriptUri: scriptUri.toString(),
-      styleUri: styleUri.toString(),
-      nonce: randomBytes(18).toString('base64url'),
-    });
+    const webviewLoad = loadWebview(view.webview, () =>
+      createWebviewHtml({
+        cspSource: view.webview.cspSource,
+        scriptUri: scriptUri.toString(),
+        styleUri: styleUri.toString(),
+        nonce: randomBytes(18).toString('base64url'),
+      }),
+    );
 
     const configuration = vscode.workspace.getConfiguration('gitLogWorkbench');
     const storedLayout = this.context.workspaceState.get<WorkbenchLayout>(
@@ -163,6 +166,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
 
     const session: WorkbenchViewSession = { controller, watchManager, disposables: [], ready: false };
     session.disposables.push(
+      webviewLoad,
       view.webview.onDidReceiveMessage((rawMessage: unknown) => {
         const message = parseWebviewMessage(rawMessage);
         if (!message) {

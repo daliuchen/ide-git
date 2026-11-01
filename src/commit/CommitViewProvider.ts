@@ -10,6 +10,7 @@ import { discoverRepositories, inspectRepository } from '../repositories/discove
 import type { RepositoryRegistry } from '../repositories/RepositoryRegistry';
 import type { RepositorySummary } from '../shared/models';
 import { createWebviewHtml } from '../webview/createWebviewHtml';
+import { loadWebview } from '../webview/loadWebview';
 import {
   DEFAULT_COMMIT_CHECKS,
   DEFAULT_COMMIT_VIEW_LAYOUT,
@@ -99,13 +100,15 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
       enableScripts: true,
       localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'dist')],
     };
-    view.webview.html = createWebviewHtml({
-      cspSource: view.webview.cspSource,
-      scriptUri: view.webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', 'commit.js')).toString(),
-      styleUri: view.webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', 'commit.css')).toString(),
-      nonce: randomBytes(18).toString('base64url'),
-    });
     this.viewDisposables.push(
+      loadWebview(view.webview, () =>
+        createWebviewHtml({
+          cspSource: view.webview.cspSource,
+          scriptUri: view.webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', 'commit.js')).toString(),
+          styleUri: view.webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', 'commit.css')).toString(),
+          nonce: randomBytes(18).toString('base64url'),
+        }),
+      ),
       view.webview.onDidReceiveMessage((raw: unknown) => {
         const message = parseCommitWebviewMessage(raw);
         if (!message) {
