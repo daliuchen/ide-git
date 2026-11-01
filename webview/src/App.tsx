@@ -518,14 +518,6 @@ export function App() {
   const [detailsHashCopyState, setDetailsHashCopyState] = useState<
     'idle' | 'copying' | 'copied'
   >('idle');
-  const [commitRevealTarget, setCommitRevealTarget] = useState<
-    {
-      repositoryId: string;
-      hash: string;
-      requestId: number;
-      minimumListRevision: number;
-    } | undefined
-  >();
   const [collapsedRefGroups, setCollapsedRefGroups] = useState<Set<string>>(new Set());
   const [collapsedRefFolders, setCollapsedRefFolders] = useState<Set<string>>(new Set());
   const filterTimer = useRef<number | undefined>(undefined);
@@ -569,7 +561,6 @@ export function App() {
   const activeCommitMessagesRequest = useRef<string | undefined>(undefined);
   const stashDialogRepository = useRef<string | undefined>(undefined);
   const commitSelectionAnchor = useRef<string | undefined>(undefined);
-  const commitRevealSequence = useRef(0);
   const selectedRepository = state.repositories.find(
     (repository) => repository.id === state.selectedRepositoryId,
   );
@@ -615,10 +606,6 @@ export function App() {
     applyFilters({ ...state.filters, allBranches: false, branches: [ref.fullName], compare: undefined });
     setFilterPopup(undefined);
   };
-  const visibleCommitRevealTarget =
-    !state.history && commitRevealTarget?.repositoryId === state.selectedRepositoryId
-      ? commitRevealTarget
-      : undefined;
   const refSearchActive = Boolean(refSearch.trim());
   const visibleRefs = useMemo(() => {
     const query = refSearch.trim().toLocaleLowerCase();
@@ -1525,7 +1512,6 @@ export function App() {
       scrollPersistTimer.current = undefined;
     }
     pendingScrollPosition.current = undefined;
-    setCommitRevealTarget(undefined);
     setContextMenu(undefined);
     setNamedOperation(undefined);
     setPushHeadDialog(undefined);
@@ -1755,22 +1741,6 @@ export function App() {
       ...(parent ? { parent } : {}),
     });
     setContextMenu(undefined);
-  };
-
-  const goToHead = (): void => {
-    if (!state.selectedRepositoryId || !selectedRepository?.head) return;
-    const repositoryId = state.selectedRepositoryId;
-    const head = selectedRepository.head;
-    commitRevealSequence.current += 1;
-    setCommitRevealTarget({
-      repositoryId,
-      hash: head,
-      requestId: commitRevealSequence.current,
-      minimumListRevision:
-        state.commitListRevision +
-        (pendingFiltersRef.current?.repositoryId === repositoryId ? 1 : 0),
-    });
-    selectHash(head, 'head');
   };
 
   const loadMore = (): void => {
@@ -2680,15 +2650,6 @@ export function App() {
         </button>
         <button
           type="button"
-          aria-label="Go to HEAD"
-          title="Locate the current HEAD commit"
-          disabled={!selectedRepository?.head}
-          onClick={goToHead}
-        >
-          <i className="codicon codicon-target" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
           aria-label="Fetch remotes"
           title="Fetch from remotes"
           disabled={!state.selectedRepositoryId || selectedRepository?.isBare || selectedOperationInFlight}
@@ -3345,14 +3306,6 @@ export function App() {
                   ? `history:${state.history.repositoryId}:${state.history.path}`
                   : `log:${state.selectedRepositoryId ?? ''}:${String(state.startLogOffset)}`
               }
-              {...(visibleCommitRevealTarget
-                ? {
-                    revealTarget: {
-                      ...visibleCommitRevealTarget,
-                      listRevision: state.commitListRevision,
-                    },
-                  }
-                : {})}
               onScrollTopChange={handleCommitScrollTopChange}
               onHorizontalScroll={syncLogHeaderScroll}
               onSelect={selectCommit}

@@ -110,7 +110,7 @@ Open the **Git Log** tab in the bottom panel (`Git Log: Open Log`). Right-click 
 - Commits: Edit Commit Message…, Fixup… / Squash Into… (prepares `fixup!` / `squash!` in the Commit window), Undo Commit, Interactively Rebase from Here…, Push All up to Here…, Create Patch…, Compare with Local.
 - Changed files: Compare with Local, Jump to Source, Show History for File, Revert / Cherry-Pick Selected Changes, Get from Revision, Drop Selected Changes… (removes the file's changes from that commit), Create Patch….
 - Branches: Checkout and Rebase onto Current, Rebase Current onto, Merge into Current, Pull into Current Using Rebase/Merge, Update (fast-forward without checkout), Show Diff with Working Tree.
-- Toolbar: Refresh, Go to HEAD, Fetch, Pull, Push…, Stashes. `Git Log: Update Project…` (pull with rebase or merge) is in the Command Palette. The branch list and Changed Files are always shown.
+- Toolbar: Refresh, Fetch, Pull, Push…, Stashes. `Git Log: Update Project…` (pull with rebase or merge) is in the Command Palette. The branch list and Changed Files are always shown.
 
 ### Dialogs and popups
 
@@ -244,7 +244,7 @@ The current version covers Milestones 0–6 and the editor history work from Mil
 - Branch filter shortcuts: `All` selects Local, Remote, and Tag references together, supports more than 100 references, and allows individual references to be deselected. `HEAD (local)` shows the current HEAD's history, including detached HEAD, while preserving other log filters.
 - A dedicated Branch pane search and a recursive, collapsible reference tree that groups slash-delimited Local, Remote, and Tag names into folders. Remote names containing `/` remain distinct top-level folders.
 - A dedicated `Git Log` tab in the VS Code bottom Panel alongside Problems, Output, and Terminal. `Open Log` focuses this tab directly without opening an editor page or intermediate welcome view.
-- Paginated logs, bounded sliding windows, custom DAG lanes, graph continuation across windows, fixed-row virtual scrolling, and large-list performance benchmarks. Deep-page global offsets, selections, and relative scroll positions can be restored. `Go to HEAD` locates the checked-out HEAD in the active filtered list and aligns it as the first visible row without changing the filter.
+- Paginated logs, bounded sliding windows, custom DAG lanes, graph continuation across windows, fixed-row virtual scrolling, and large-list performance benchmarks. Deep-page global offsets, selections, and relative scroll positions can be restored.
 - Combined Text/Hash, Branch, User, Date, and Path filters with cancellation and stale-response rejection. Repository refreshes do not overwrite an active search draft. Text queries scan the full message, author name, and email in canonical `git log --date-order` order and return only matching commits. Hidden ancestry is projected directly onto those matches so the graph stays continuous without inserting unrelated merge commits or excessive lanes.
 - Changed-file handling for root, merge, rename, copy, and binary commits, with native VS Code diffs. Multi-commit selections combine files from every selected commit while retaining the correct commit and parent for each file action. Detail queries load up to four selected commits concurrently and reuse successful results in bounded caches that are cleared on repository refresh; selection order and current ref labels are preserved.
 - Checkout, Checkout Revision, Branch, Tag, Fetch, Pull, Push, Cherry-pick, Revert, Merge, Rebase, Reset, and branch rename/delete operations, with context menus for commits and Local, Remote, Tag, and HEAD refs. An active rebase displays a dedicated status row with `Continue`, `Skip`, and `Abort`; `Continue` is enabled only after conflicts are marked resolved.
@@ -289,7 +289,6 @@ pnpm run package
 ## Usage tips
 
 - Click or double-click a Local or Remote branch to display its commit history without checking it out. Use the Local branch context menu when you explicitly want to check it out.
-- Use `Go to HEAD` to locate the repository's checked-out HEAD inside the commit list currently being viewed; it does not switch the active Branch filter.
 - In the `Branch` filter, use `All` to select Local, Remote, and Tag references together, or `HEAD (local)` to return to the current HEAD's history, including detached HEAD. Individual references can be toggled after selecting `All`; text, author, date, and path filters are preserved.
 - Use `Force Delete…` only when a non-current Local Branch must be removed even though it is not fully merged. Git Log shows a modal confirmation before running the operation.
 - Use the Branch pane search to filter references locally. Slash-delimited names are grouped into folders that can be expanded or collapsed independently.
