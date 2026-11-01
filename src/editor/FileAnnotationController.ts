@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs';
 import { dirname, relative } from 'node:path';
 import * as vscode from 'vscode';
 import type { DiffManager } from '../diff/DiffManager';
@@ -8,13 +9,25 @@ import { parseBlamePorcelain, type BlameLine } from '../git/parsers/parseBlamePo
 
 const UNCOMMITTED = /^0+$/u;
 
+function realPath(path: string): string {
+  try {
+    return realpathSync.native(path);
+  } catch {
+    return path;
+  }
+}
+
 function formatDate(seconds: number): string {
   const date = new Date(seconds * 1000);
   return `${String(date.getFullYear())}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
 function truncate(value: string, length: number): string {
-  return value.length > length ? `${value.slice(0, length - 1)}…` : value.padEnd(length, '\u2002');
+  return value.length > length ? `${value.slice(0, length - 1)}…` : value;
+}
+
+function tint(uncommitted: boolean, age: number): string {
+  return uncommitted ? 'rgba(80, 140, 255, 0.12)' : `rgba(255, 170, 60, ${(0.05 + age * 0.22).toFixed(3)})`;
 }
 
 interface Annotation {
@@ -34,6 +47,9 @@ export class FileAnnotationController implements vscode.Disposable {
     rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
   });
   private readonly annotated = new Map<string, Annotation>();
+  private readonly changeEmitter = new vscode.EventEmitter<void>();
+  /** Fires when a file is annotated or the annotation is removed. */
+  readonly onDidChange = this.changeEmitter.event;
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly disposables: vscode.Disposable[] = [];
 
@@ -44,6 +60,7 @@ export class FileAnnotationController implements vscode.Disposable {
   ) {
     this.disposables.push(
       this.decoration,
+      this.changeEmitter,
       vscode.commands.registerCommand('gitLogWorkbench.editor.toggleAnnotate', (resource?: unknown) =>
         this.toggle(resource instanceof vscode.Uri ? resource : undefined),
       ),
@@ -77,6 +94,10 @@ export class FileAnnotationController implements vscode.Disposable {
     );
   }
 
+  isAnnotated(uri: vscode.Uri): boolean {
+    return this.annotated.has(uri.toString());
+  }
+
   dispose(): void {
     for (const timer of this.timers.values()) clearTimeout(timer);
     for (const disposable of this.disposables.splice(0)) disposable.dispose();
@@ -96,6 +117,7 @@ export class FileAnnotationController implements vscode.Disposable {
     if (this.annotated.delete(key)) {
       this.renderVisible();
       this.updateContext();
+      this.changeEmitter.fire();
       return;
     }
     try {
@@ -113,8 +135,9 @@ export class FileAnnotationController implements vscode.Disposable {
   private async load(document: vscode.TextDocument): Promise<void> {
     const repository = await inspectRepository(dirname(document.uri.fsPath), this.runner);
     if (!repository) throw new Error('The file is not in a Git repository.');
-    const root = vscode.Uri.parse(repository.rootUri).fsPath;
-    const path = relative(root, document.uri.fsPath).split('\\').join('/');
+    // Resolve symlinks on both sides (e.g. /tmp → /private/tmp on macOS) so the relative path is right.
+    const root = realPath(vscode.Uri.parse(repository.rootUri).fsPath);
+    const path = relative(root, realPath(document.uri.fsPath)).split('\\').join('/');
     const result = await this.runner.run(
       ['blame', '--porcelain', '-w', '--contents', '-', '--', path],
       { cwd: root, timeoutMs: 60_000, input: document.getText(), maxStdoutBytes: 64 * 1024 * 1024 },
@@ -128,6 +151,7 @@ export class FileAnnotationController implements vscode.Disposable {
     });
     this.renderVisible();
     this.updateContext();
+    this.changeEmitter.fire();
   }
 
   private updateContext(): void {
@@ -160,14 +184,11 @@ export class FileAnnotationController implements vscode.Disposable {
         const line = annotation.lines[index];
         if (!line) continue;
         const uncommitted = UNCOMMITTED.test(line.hash);
-        const previous = annotation.lines[index - 1];
-        const repeat = previous?.hash === line.hash;
         const age = newest > oldest ? (line.authorTime - oldest) / (newest - oldest) : 1;
+        // Every line is labelled, as in the IDE's annotate gutter.
         const text = uncommitted
-          ? truncate('Not committed', authorWidth + 12)
-          : repeat
-            ? '\u2002'.repeat(authorWidth + 12)
-            : `${formatDate(line.authorTime)}  ${truncate(line.author, authorWidth)}`;
+          ? 'Not committed'
+          : `${formatDate(line.authorTime)}  ${truncate(line.author, authorWidth)}`;
         const hover = new vscode.MarkdownString(undefined, true);
         hover.isTrusted = {
           enabledCommands: ['gitLogWorkbench.annotate.showDiff', 'gitLogWorkbench.annotate.copyHash'],
@@ -198,10 +219,11 @@ export class FileAnnotationController implements vscode.Disposable {
           renderOptions: {
             before: {
               contentText: text,
+              // One width for every line (in characters of the editor font), so the column is even.
+              width: `${String(authorWidth + 13)}ch`,
               color: new vscode.ThemeColor(uncommitted ? 'gitDecoration.modifiedResourceForeground' : 'editorLineNumber.foreground'),
-              backgroundColor: uncommitted
-                ? 'rgba(80, 140, 255, 0.10)'
-                : `rgba(255, 170, 60, ${(0.04 + age * 0.22).toFixed(3)})`,
+              // The age tint sits on the editor background so indent guides do not show through.
+              textDecoration: `none; background: linear-gradient(${tint(uncommitted, age)}, ${tint(uncommitted, age)}), var(--vscode-editor-background); white-space: pre; overflow: hidden; vertical-align: top`,
               fontStyle: 'normal',
             },
           },

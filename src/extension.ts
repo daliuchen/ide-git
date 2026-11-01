@@ -222,6 +222,7 @@ export function activate(context: vscode.ExtensionContext): void {
       editor.setDecorations(lineBlameDecoration, []);
     }
   };
+  const fileAnnotations = new FileAnnotationController(runner, repositories, diffManager);
   const currentLineBlame = new CurrentLineBlameController(
     editorContexts,
     lineBlameService,
@@ -231,6 +232,11 @@ export function activate(context: vscode.ExtensionContext): void {
       render: (snapshot, presentation) => {
         const editor = vscode.window.activeTextEditor;
         if (!editor || editorKey(editor) !== snapshot.key) return;
+        // The annotate column already shows this line's commit.
+        if (fileAnnotations.isAnnotated(editor.document.uri)) {
+          editor.setDecorations(lineBlameDecoration, []);
+          return;
+        }
         const line = editor.document.lineAt(snapshot.line);
         const position = line.range.end;
         editor.setDecorations(lineBlameDecoration, [
@@ -251,6 +257,11 @@ export function activate(context: vscode.ExtensionContext): void {
       now: () => Date.now(),
     },
   );
+  // Hide or bring back the end-of-line blame when a file's annotate column is toggled.
+  const annotationToggle = fileAnnotations.onDidChange(() => {
+    currentLineBlame.invalidate();
+    void currentLineBlame.refresh();
+  });
   let lineBlameTimer: ReturnType<typeof setTimeout> | undefined;
   const scheduleLineBlame = (delayMs = 150): void => {
     if (lineBlameTimer) clearTimeout(lineBlameTimer);
@@ -598,7 +609,8 @@ export function activate(context: vscode.ExtensionContext): void {
     commitCommand,
     commitChangeCommand,
     amendChangeCommand,
-    new FileAnnotationController(runner, repositories, diffManager),
+    fileAnnotations,
+    annotationToggle,
     dialogs,
     branchesCommand,
     compareWithLocalCommand,
