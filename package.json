@@ -5,6 +5,7 @@
   "version": "0.3.0",
   "publisher": "daliuchen",
   "license": "MIT",
+  "packageManager": "pnpm@10.33.0",
   "icon": "media/git-log.png",
   "repository": {
     "type": "git",
@@ -370,9 +371,9 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:unit": "vitest run test/unit",
-    "test:integration": "npm run build && node ./scripts/run-integration.mjs",
+    "test:integration": "pnpm run build && node ./scripts/run-integration.mjs",
     "test:performance": "vitest run test/performance",
-    "package": "npm run clean && npm run build && vsce package --no-dependencies --baseContentUrl https://github.com/daliuchen/ide-git/blob/main --baseImagesUrl https://raw.githubusercontent.com/daliuchen/ide-git/main"
+    "package": "pnpm run clean && pnpm run build && vsce package --no-dependencies --baseContentUrl https://github.com/daliuchen/ide-git/blob/main --baseImagesUrl https://raw.githubusercontent.com/daliuchen/ide-git/main"
   },
   "dependencies": {
     "@vscode/codicons": "0.0.36",

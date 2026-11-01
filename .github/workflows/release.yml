@@ -1,242 +1,161 @@
-name: Release VSIX
+name: Release
 
+# Every merge to main runs this, but it only publishes when package.json has a version that has
+# no `v<version>` tag yet. To release, bump the version (and CHANGELOG.md) in a pull request.
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 jobs:
+  check:
+    name: Check for a new version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Compare package.json with existing tags
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "v$VERSION is already released; nothing to publish."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: Test and package
+    needs: check
+    if: needs.check.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    permissions:
-      contents: read
-
     steps:
-      - name: Check out triggering commit
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
-          fetch-depth: 0
           persist-credentials: false
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
+          node-version-file: .tool-versions
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
-
-      - name: Set package version from tag
-        shell: bash
-        env:
-          TAG_NAME: ${{ github.ref_name }}
-        run: |
-          VERSION="${TAG_NAME#v}"
-          if [[ "$VERSION" == *+* ]]; then
-            echo "Build metadata is not supported in release tags: $TAG_NAME" >&2
-            exit 1
-          fi
-
-          npm version "$VERSION" --no-git-tag-version --ignore-scripts --allow-same-version
-          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
-          if [[ "$PACKAGE_VERSION" != "$VERSION" ]]; then
-            echo "Tag $TAG_NAME does not map exactly to package version $PACKAGE_VERSION." >&2
-            exit 1
-          fi
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Test
-        run: npm test
+        run: pnpm install --frozen-lockfile
 
       - name: Type-check
-        run: npm run typecheck
+        run: pnpm run typecheck
 
-      - name: Test VS Code 1.85.2 compatibility
-        run: xvfb-run -a npm run test:integration
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Unit tests
+        run: pnpm run test:unit
+
+      - name: VS Code 1.85.2 integration tests
+        run: xvfb-run -a pnpm run test:integration
 
       - name: Package VSIX
-        run: npm run package
+        run: pnpm run package
 
-      - name: Locate VSIX
-        id: vsix
+      - name: Check the package
         shell: bash
         run: |
-          mapfile -t VSIX_FILES < <(find . -maxdepth 1 -type f -name '*.vsix' -print)
-          if [[ "${#VSIX_FILES[@]}" -ne 1 ]]; then
-            echo "Expected exactly one VSIX package, found ${#VSIX_FILES[@]}." >&2
-            exit 1
-          fi
-          echo "path=${VSIX_FILES[0]}" >> "$GITHUB_OUTPUT"
+          VSIX="ide-git-${{ needs.check.outputs.version }}.vsix"
+          test -f "$VSIX" || { echo "Expected $VSIX" >&2; ls *.vsix >&2; exit 1; }
 
-      - name: Upload packaged VSIX
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: vsix-${{ github.sha }}
-          path: ${{ steps.vsix.outputs.path }}
+          name: vsix
+          path: ide-git-${{ needs.check.outputs.version }}.vsix
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
 
-  publish:
-    name: Publish GitHub Release
-    needs: build
+  github-release:
+    name: Tag and GitHub Release
+    needs: [check, build]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     permissions:
       contents: write
-
     steps:
-      - name: Check out triggering commit
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
-          fetch-depth: 0
           persist-credentials: false
 
-      - name: Download packaged VSIX
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          name: vsix-${{ github.sha }}
-          path: release-artifact
+          name: vsix
 
-      - name: Verify tag and publish release
+      - name: Release notes from CHANGELOG.md
         shell: bash
+        run: |
+          VERSION="${{ needs.check.outputs.version }}"
+          awk -v heading="## $VERSION" '
+            index($0, heading) == 1 { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          if [[ ! -s notes.md ]]; then
+            echo "CHANGELOG.md has no section for $VERSION." >&2
+            exit 1
+          fi
+
+      - name: Create tag and release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG_NAME: ${{ github.ref_name }}
-          EXPECTED_SHA: ${{ github.sha }}
-        run: |
-          git fetch --force origin "refs/tags/${TAG_NAME}:refs/tags/${TAG_NAME}"
-          CURRENT_TAG_SHA="$(git rev-list -n 1 "refs/tags/${TAG_NAME}")"
-          if [[ "$CURRENT_TAG_SHA" != "$EXPECTED_SHA" ]]; then
-            echo "Tag $TAG_NAME now points to $CURRENT_TAG_SHA instead of triggering commit $EXPECTED_SHA." >&2
-            exit 1
-          fi
-
-          mapfile -t VSIX_FILES < <(find release-artifact -maxdepth 1 -type f -name '*.vsix' -print)
-          if [[ "${#VSIX_FILES[@]}" -ne 1 ]]; then
-            echo "Expected exactly one downloaded VSIX, found ${#VSIX_FILES[@]}." >&2
-            exit 1
-          fi
-          VSIX_PATH="${VSIX_FILES[0]}"
-
-          VERSION="${TAG_NAME#v}"
-          IS_PRERELEASE=false
-          if [[ "$VERSION" == *-* ]]; then
-            IS_PRERELEASE=true
-          fi
-
-          set +e
-          RELEASE_LOOKUP="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG_NAME}" 2>&1)"
-          RELEASE_STATUS=$?
-          set -e
-
-          if [[ "$RELEASE_STATUS" -eq 0 ]]; then
-            gh release upload "$TAG_NAME" "$VSIX_PATH" --clobber
-            gh release edit "$TAG_NAME" \
-              --title "$TAG_NAME" \
-              --draft=false \
-              --prerelease="$IS_PRERELEASE"
-          elif grep -q 'HTTP 404' <<<"$RELEASE_LOOKUP"; then
-            RELEASE_ARGS=(
-              "$TAG_NAME"
-              "$VSIX_PATH"
-              --title "$TAG_NAME"
-              --generate-notes
-              --verify-tag
-            )
-            if [[ "$IS_PRERELEASE" == true ]]; then
-              RELEASE_ARGS+=(--prerelease)
-            fi
-            gh release create "${RELEASE_ARGS[@]}"
-          else
-            echo "$RELEASE_LOOKUP" >&2
-            exit "$RELEASE_STATUS"
-          fi
-
-  publish-vscode-marketplace:
-    name: Publish VS Code Marketplace
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-
-    steps:
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Download packaged VSIX
-        uses: actions/download-artifact@v4
-        with:
-          name: vsix-${{ github.sha }}
-          path: release-artifact
-
-      - name: Locate VSIX
-        id: vsix
-        shell: bash
-        run: |
-          mapfile -t VSIX_FILES < <(find release-artifact -maxdepth 1 -type f -name '*.vsix' -print)
-          if [[ "${#VSIX_FILES[@]}" -ne 1 ]]; then
-            echo "Expected exactly one downloaded VSIX, found ${#VSIX_FILES[@]}." >&2
-            exit 1
-          fi
-          echo "path=${VSIX_FILES[0]}" >> "$GITHUB_OUTPUT"
-
-      - name: Publish to VS Code Marketplace
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: >-
-          npx --yes @vscode/vsce@3.9.2 publish
-          --packagePath "${{ steps.vsix.outputs.path }}"
-          --skip-duplicate
+          gh release create "v${{ needs.check.outputs.version }}"
+          "ide-git-${{ needs.check.outputs.version }}.vsix"
+          --repo "${{ github.repository }}"
+          --target "${{ github.sha }}"
+          --title "v${{ needs.check.outputs.version }}"
+          --notes-file notes.md
 
-  publish-open-vsx:
-    name: Publish Open VSX
-    needs: build
+  open-vsx:
+    name: Publish to Open VSX
+    needs: [check, build, github-release]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     permissions:
       contents: read
-
+      # Trusted publishing: the job's OIDC token is exchanged for a short-lived Open VSX token.
+      id-token: write
     steps:
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Download packaged VSIX
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          name: vsix-${{ github.sha }}
-          path: release-artifact
+          name: vsix
 
-      - name: Locate VSIX
-        id: vsix
+      - name: Publish
+        env:
+          # Only needed for the very first release, before a trusted publisher can be registered.
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
         shell: bash
         run: |
-          mapfile -t VSIX_FILES < <(find release-artifact -maxdepth 1 -type f -name '*.vsix' -print)
-          if [[ "${#VSIX_FILES[@]}" -ne 1 ]]; then
-            echo "Expected exactly one downloaded VSIX, found ${#VSIX_FILES[@]}." >&2
-            exit 1
+          VSIX="ide-git-${{ needs.check.outputs.version }}.vsix"
+          if [[ -n "$OVSX_PAT" ]]; then
+            npx --yes ovsx@1.3.0 create-namespace daliuchen || true  # already exists after the first time
+            npx --yes ovsx@1.3.0 publish "$VSIX"
+          else
+            npx --yes ovsx@1.3.0 publish "$VSIX" --trusted-publishing
           fi
-          echo "path=${VSIX_FILES[0]}" >> "$GITHUB_OUTPUT"
-
-      - name: Publish to Open VSX
-        env:
-          OVSX_PAT: ${{ secrets.OVSX_PAT }}
-        run: npx --yes ovsx@1.1.1 publish "${{ steps.vsix.outputs.path }}"

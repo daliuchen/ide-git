@@ -74,7 +74,7 @@ describe('extension contributions', () => {
   it('verifies VS Code 1.85.2 compatibility before publishing a release', async () => {
     const workflow = await readFile('.github/workflows/release.yml', 'utf8');
 
-    expect(workflow).toContain('xvfb-run -a npm run test:integration');
+    expect(workflow).toContain('xvfb-run -a pnpm run test:integration');
   });
 
   it('provides a PNG icon for the extension details page', async () => {
