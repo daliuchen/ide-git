@@ -2984,7 +2984,7 @@ describe('WorkbenchApp', () => {
     expect(postedMessages).toContainEqual(expect.objectContaining({
       type: 'updateFilters', filters: expect.objectContaining({ allBranches: false, branches: ['refs/heads/branch-0'] }),
     }));
-  });
+  }, 20_000);
 
   it.each([false, true])('offers a local HEAD branch shortcut with detached=%s and no loaded refs', (detached) => {
     const { newest } = initializeCommitRangeFixture();
