@@ -115,10 +115,6 @@ select:focus-visible,
   display: none;
 }
 
-.workbench-shell.files-collapsed .filter-bar {
-  margin-right: calc(var(--global-toolbar-width) + 8px);
-}
-
 .filter-bar > button,
 .filter-bar > .field,
 .filter-bar > .operation-badge,

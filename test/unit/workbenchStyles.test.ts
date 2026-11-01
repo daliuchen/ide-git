@@ -92,8 +92,7 @@ describe('workbench styles', () => {
     expect(styles).toMatch(
       /\.workspace-grid\s*\{[^}]*grid-template-columns:\s*220px 1px minmax\(340px, 1fr\) 1px 320px;/su,
     );
-    expect(app).toContain('refsCollapsed ? 0 : 1');
-    expect(app).toContain('filesCollapsed ? 0 : 1');
+    expect(app).toContain('px, 26%) 1px minmax(240px, 1fr) 1px min(');
     expect(styles).not.toMatch(
       /\.refs-pane,\s*\n\.log-pane\s*\{[^}]*border-right:\s*1px solid var\(--vscode-panel-border\);/su,
     );
@@ -117,9 +116,6 @@ describe('workbench styles', () => {
     );
     expect(styles).toMatch(
       /\.files-pane\s*\{[^}]*grid-template-rows:\s*38px 30px minmax\(0, 1fr\) auto;/su,
-    );
-    expect(styles).toMatch(
-      /\.workbench-shell\.files-collapsed\s+\.filter-bar\s*\{[^}]*margin-right:\s*calc\(var\(--global-toolbar-width\) \+ 8px\);/su,
     );
   });
 

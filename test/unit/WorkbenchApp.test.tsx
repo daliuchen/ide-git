@@ -186,11 +186,10 @@ describe('WorkbenchApp', () => {
     });
   }
 
-  function openPushHeadDialog(entry: 'head' | 'toolbar' = 'head') {
+  function openPushHeadDialog() {
     const { newest } = initializeCommitRangeFixture();
     updateHeadRepository(newest);
-    if (entry === 'head') fireEvent.contextMenu(screen.getByTitle(newest));
-    else fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.contextMenu(screen.getByTitle(newest));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Push HEAD…' }));
     const request = postedMessages.filter((message) => message.type === 'requestPushHeadTargets').at(-1);
     if (request?.type !== 'requestPushHeadTargets') throw new Error('Expected push targets request');
@@ -205,8 +204,8 @@ describe('WorkbenchApp', () => {
     });
   }
 
-  it.each(['head', 'toolbar'] as const)('pushes detached HEAD to the selected destination from the %s menu', (entry) => {
-    const { request, newest } = openPushHeadDialog(entry);
+  it('pushes detached HEAD to the selected destination from the HEAD menu', () => {
+    const { request, newest } = openPushHeadDialog();
     const dialog = screen.getByRole('dialog', { name: 'Push HEAD' });
     expect(within(dialog).getByRole('button', { name: 'Push' })).toBeDisabled();
     loadPushRemotes(request.requestId, ['upstream', 'origin']);
@@ -345,7 +344,6 @@ describe('WorkbenchApp', () => {
       'Go to HEAD',
       'Fetch remotes',
       'Manage stashes',
-      'More actions',
     ]) {
       expect(globalActions).toContainElement(screen.getByRole('button', { name }));
     }
@@ -3504,8 +3502,7 @@ describe('WorkbenchApp', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create Branch' }));
     completeLatestOperation();
-    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Pull' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pull' }));
 
     expect(postedMessages).toEqual(
       expect.arrayContaining([
@@ -3921,19 +3918,6 @@ describe('WorkbenchApp', () => {
     ).toEqual(['commit-subject-cell', 'commit-author', 'commit-date', 'commit-refs']);
   });
 
-  it('brings back a hidden Changed Files pane when a commit is picked', () => {
-    initializeCommitRangeFixture();
-    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Collapse changed files pane' }));
-    expect(screen.queryByRole('region', { name: 'Changed files' })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('middle commit').closest('[role="row"]') as HTMLElement);
-    expect(screen.getByRole('region', { name: 'Changed files' })).toBeInTheDocument();
-    expect(postedMessages).toContainEqual(
-      expect.objectContaining({ type: 'updateLayout', layout: expect.objectContaining({ filesCollapsed: false }) }),
-    );
-  });
-
   it('puts Pull and Push on the toolbar', () => {
     initializeCommitRangeFixture();
     const toolbar = screen.getByRole('toolbar', { name: 'Global Git actions' });
@@ -4093,56 +4077,14 @@ describe('WorkbenchApp', () => {
       type: 'updateLayout',
       layout: expect.objectContaining({ commitColumnWidth: 1810 }),
     });
-
-    postedMessages.length = 0;
-    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Collapse references pane' }));
-    expect(screen.queryByRole('navigation', { name: 'Git references' })).not.toBeInTheDocument();
-    expect(postedMessages.at(-1)).toMatchObject({
-      type: 'updateLayout',
-      layout: expect.objectContaining({ refsCollapsed: true }),
-    });
-    if (!screen.queryByRole('menu')) fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Collapse changed files pane' }));
-    expect(screen.queryByRole('region', { name: 'Changed files' })).not.toBeInTheDocument();
-    expect(postedMessages.at(-1)).toMatchObject({
-      type: 'updateLayout',
-      layout: expect.objectContaining({ filesCollapsed: true }),
-    });
   });
 
-  it('collapses the files track and resizer at narrow widths while keeping a restore control', () => {
-    Object.defineProperty(window, 'matchMedia', {
-      configurable: true,
-      value: vi.fn((query: string) => ({
-        matches: query === '(max-width: 900px)',
-        media: query,
-        onchange: null,
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        addListener: vi.fn(),
-        removeListener: vi.fn(),
-        dispatchEvent: vi.fn(),
-      })),
-    });
-
+  it('always shows both side panes', () => {
     render(<App />);
-
-    expect(document.querySelector('.workbench-shell')).toHaveClass('files-collapsed');
-    expect(screen.queryByRole('region', { name: 'Changed files' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('separator', { name: 'Resize changed files pane' })).not.toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Git references' })).toBeInTheDocument();
-    expect(screen.getByRole('toolbar', { name: 'Global Git actions' })).toBeInTheDocument();
-    expect(document.querySelector<HTMLElement>('.workspace-grid')?.style.gridTemplateColumns).toBe(
-      '220px 1px minmax(340px, 1fr) 0px 0px',
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Expand changed files pane' }));
-
     expect(screen.getByRole('region', { name: 'Changed files' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Git references' })).toBeInTheDocument();
     expect(screen.getByRole('separator', { name: 'Resize changed files pane' })).toBeInTheDocument();
-    expect(document.querySelector('.workbench-shell')).not.toHaveClass('files-collapsed');
+    expect(screen.queryByRole('menuitem', { name: /pane/u })).not.toBeInTheDocument();
   });
 
   it('offers retry, Git output, and diagnostic actions for errors', () => {
@@ -5422,28 +5364,6 @@ describe('WorkbenchApp', () => {
 
     fireEvent.click(userButton);
     expect(screen.getByRole('dialog', { name: 'user filter' })).toBeInTheDocument();
-    const moreButton = screen.getByRole('button', { name: 'More actions' });
-    moreButton.getBoundingClientRect = () =>
-      ({
-        x: 965,
-        y: 5,
-        top: 5,
-        right: 992,
-        bottom: 32,
-        left: 965,
-        width: 27,
-        height: 27,
-        toJSON: () => ({}),
-      }) as DOMRect;
-    fireEvent.pointerDown(moreButton);
-    fireEvent.click(moreButton);
-    expect(screen.queryByRole('dialog', { name: 'user filter' })).not.toBeInTheDocument();
-    expect(screen.getByRole('menu', { name: 'toolbar actions' })).toHaveStyle({ right: '32px' });
-
-    fireEvent.pointerDown(moreButton);
-    fireEvent.click(moreButton);
-    expect(screen.queryByRole('menu', { name: 'toolbar actions' })).not.toBeInTheDocument();
-
     fireEvent.click(userButton);
     fireEvent.pointerDown(screen.getByRole('grid', { name: 'Commit log' }));
     expect(screen.queryByRole('dialog', { name: 'user filter' })).not.toBeInTheDocument();
@@ -5732,7 +5652,6 @@ describe('WorkbenchApp', () => {
       ['Refresh log', 'Refresh local repository state'],
       ['Go to HEAD', 'Locate the current HEAD commit'],
       ['Fetch remotes', 'Fetch from remotes'],
-      ['More actions', 'More Git actions'],
     ]);
     for (const [name, title] of expectedTitles) {
       expect(screen.getByRole('button', { name })).toHaveAttribute('title', title);

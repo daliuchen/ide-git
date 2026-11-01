@@ -464,7 +464,6 @@ export function App() {
       }
     | { kind: 'ref'; repositoryId: string; ref: RefLabel; x: number; y: number }
     | { kind: 'file'; repositoryId: string; file: ChangedFile; x: number; y: number }
-    | { kind: 'toolbar'; repositoryId: string; x: number; y: number }
     | { kind: 'head'; repositoryId: string; hash: string; x: number; y: number }
     | undefined
   >();
@@ -529,11 +528,6 @@ export function App() {
   >();
   const [collapsedRefGroups, setCollapsedRefGroups] = useState<Set<string>>(new Set());
   const [collapsedRefFolders, setCollapsedRefFolders] = useState<Set<string>>(new Set());
-  const [responsiveCollapse, setResponsiveCollapse] = useState(() => ({
-    files: window.matchMedia?.('(max-width: 900px)').matches ?? false,
-    refs: window.matchMedia?.('(max-width: 680px)').matches ?? false,
-  }));
-  const [responsiveExpanded, setResponsiveExpanded] = useState({ files: false, refs: false });
   const filterTimer = useRef<number | undefined>(undefined);
   const detailsHashCopyRequest = useRef<string | undefined>(undefined);
   const detailsHashCopyTimer = useRef<number | undefined>(undefined);
@@ -717,12 +711,6 @@ export function App() {
       repositoryId: pushHeadDialog.repositoryId, operation: pushHeadOperation,
     }),
   );
-  const refsCollapsed = Boolean(
-    state.layout.refsCollapsed || (responsiveCollapse.refs && !responsiveExpanded.refs),
-  );
-  const filesCollapsed = Boolean(
-    state.layout.filesCollapsed || (responsiveCollapse.files && !responsiveExpanded.files),
-  );
   const detailsPlacement = state.layout.detailsPlacement ?? 'bottom';
   const detailsInChanges = detailsPlacement === 'changes';
   useEffect(() => {
@@ -744,13 +732,7 @@ export function App() {
     updatePosition();
     window.addEventListener('resize', updatePosition);
     return () => window.removeEventListener('resize', updatePosition);
-  }, [
-    filesCollapsed,
-    filterPopup,
-    refsCollapsed,
-    state.layout.filesWidth,
-    state.layout.refsWidth,
-  ]);
+  }, [filterPopup, state.layout.filesWidth, state.layout.refsWidth]);
   useLayoutEffect(() => {
     const menu = contextMenuRef.current;
     if (!contextMenu || !menu) return;
@@ -786,26 +768,6 @@ export function App() {
       window.removeEventListener('resize', updatePosition);
     };
   }, [contextMenu]);
-  useEffect(() => {
-    if (!window.matchMedia) return;
-    const filesQuery = window.matchMedia('(max-width: 900px)');
-    const refsQuery = window.matchMedia('(max-width: 680px)');
-    const update = (): void => {
-      setResponsiveCollapse({ files: filesQuery.matches, refs: refsQuery.matches });
-      setResponsiveExpanded((current) => ({
-        files: filesQuery.matches ? current.files : false,
-        refs: refsQuery.matches ? current.refs : false,
-      }));
-    };
-    filesQuery.addEventListener('change', update);
-    refsQuery.addEventListener('change', update);
-    update();
-    return () => {
-      filesQuery.removeEventListener('change', update);
-      refsQuery.removeEventListener('change', update);
-    };
-  }, []);
-
   useEffect(() => {
     const dismissOpenMenus = (event: PointerEvent): void => {
       const target = event.target;
@@ -922,11 +884,6 @@ export function App() {
           pendingFiltersRef.current = undefined;
           lastWindowAnchorSignature.current = undefined;
           selectedRepositoryIdRef.current = message.selectedRepositoryId;
-          if (message.layout.detailsPlacement === 'changes') {
-            setResponsiveExpanded((current) =>
-              current.files ? current : { ...current, files: true },
-            );
-          }
           setState((current) => ({
             ...current,
             repositories: message.repositories,
@@ -1632,8 +1589,6 @@ export function App() {
       return;
     }
     if (!state.selectedRepositoryId) return;
-    // A commit was picked to look at its files: bring back a Changed Files pane hidden earlier.
-    if (state.layout.filesCollapsed) persistLayout({ ...state.layout, filesCollapsed: false });
     let nextSelectedCommitHashes: string[];
     let focusedCommit = commit;
     if (toggle) {
@@ -1851,29 +1806,7 @@ export function App() {
 
   const toggleDetailsPlacement = (): void => {
     const nextPlacement = detailsInChanges ? 'bottom' : 'changes';
-    if (nextPlacement === 'changes' && responsiveCollapse.files) {
-      setResponsiveExpanded((current) => ({ ...current, files: true }));
-    }
-    persistLayout({
-      ...state.layout,
-      detailsPlacement: nextPlacement,
-      ...(nextPlacement === 'changes' ? { filesCollapsed: false } : {}),
-    });
-  };
-
-  const toggleResponsivePane = (pane: 'refs' | 'files'): void => {
-    const layoutKey = pane === 'refs' ? 'refsCollapsed' : 'filesCollapsed';
-    const responsive = responsiveCollapse[pane];
-    const expanded = responsiveExpanded[pane];
-    if (state.layout[layoutKey]) {
-      persistLayout({ ...state.layout, [layoutKey]: false });
-      return;
-    }
-    if (responsive) {
-      setResponsiveExpanded((current) => ({ ...current, [pane]: !expanded }));
-      return;
-    }
-    persistLayout({ ...state.layout, [layoutKey]: true });
+    persistLayout({ ...state.layout, detailsPlacement: nextPlacement });
   };
 
   const resizeLayout = (
@@ -2815,30 +2748,6 @@ export function App() {
         >
           <i className="codicon codicon-archive" aria-hidden="true" />
         </button>
-        <button
-          type="button"
-          data-popup-trigger="true"
-          aria-label="More actions"
-          title="More Git actions"
-          aria-haspopup="menu"
-          aria-expanded={contextMenu?.kind === 'toolbar'}
-          onClick={(event) => {
-            const bounds = event.currentTarget.getBoundingClientRect();
-            setFilterPopup(undefined);
-            setContextMenu((current) =>
-              current?.kind === 'toolbar'
-                ? undefined
-                : {
-                    kind: 'toolbar',
-                    repositoryId: state.selectedRepositoryId ?? '',
-                    x: bounds.right,
-                    y: bounds.bottom + 2,
-                  },
-            );
-          }}
-        >
-          <i className="codicon codicon-ellipsis" aria-hidden="true" />
-        </button>
     </header>
   );
 
@@ -3013,9 +2922,7 @@ export function App() {
 
   return (
     <main
-      className={`workbench-shell${filesCollapsed ? ' files-collapsed' : ''}${
-        detailsInChanges ? ' details-in-changes' : ''
-      }`}
+      className={`workbench-shell${detailsInChanges ? ' details-in-changes' : ''}`}
       style={{
         gridTemplateRows: detailsInChanges
           ? 'minmax(0, 1fr)'
@@ -3104,17 +3011,15 @@ export function App() {
       <section
         className="workspace-grid"
         style={{
-          gridTemplateColumns: `${refsCollapsed ? 0 : state.layout.refsWidth}px ${
-            refsCollapsed ? 0 : 1
-          }px minmax(340px, 1fr) ${filesCollapsed ? 0 : 1}px ${
-            filesCollapsed ? 0 : state.layout.filesWidth
-          }px`,
+          // The side panes are always shown; in a narrow panel they shrink instead of hiding.
+          gridTemplateColumns: `min(${String(state.layout.refsWidth)}px, 26%) 1px minmax(240px, 1fr) 1px min(${String(
+            state.layout.filesWidth,
+          )}px, 32%)`,
         }}
       >
         <nav
           className="refs-pane pane"
           aria-label="Git references"
-          hidden={refsCollapsed}
         >
           <div className="refs-toolbar">
             <label className="refs-search-bar field">
@@ -3241,7 +3146,6 @@ export function App() {
           aria-orientation="vertical"
           aria-valuemin={160}
           aria-valuenow={state.layout.refsWidth}
-          hidden={refsCollapsed}
           tabIndex={0}
           onPointerDown={(event) => beginResize('refsWidth', event)}
           onKeyDown={(event) => {
@@ -3509,7 +3413,6 @@ export function App() {
           aria-orientation="vertical"
           aria-valuemin={220}
           aria-valuenow={state.layout.filesWidth}
-          hidden={filesCollapsed}
           tabIndex={0}
           onPointerDown={(event) => beginResize('filesWidth', event)}
           onKeyDown={(event) => {
@@ -3522,7 +3425,6 @@ export function App() {
           className={`files-pane pane${detailsInChanges ? ' with-details' : ''}`}
           role="region"
           aria-label="Changed files"
-          hidden={filesCollapsed}
           style={
             detailsInChanges
               ? {
@@ -3680,90 +3582,6 @@ export function App() {
             if (menuItem && !menuItem.disabled) setContextMenu(undefined);
           }}
         >
-          {contextMenu.kind === 'toolbar' ? (
-            <>
-            <button type="button" role="menuitem" onClick={() => toggleResponsivePane('refs')}>
-              {refsCollapsed ? 'Expand' : 'Collapse'} references pane
-            </button>
-            <button type="button" role="menuitem" onClick={() => toggleResponsivePane('files')}>
-              {filesCollapsed ? 'Expand' : 'Collapse'} changed files pane
-            </button>
-            {selectedRepository ? <div className="context-menu-separator" role="separator" /> : null}
-            {!selectedRepository ? null : selectedRepository.operationState ? (
-              <span className="menu-note">
-                Git {selectedRepository.operationState} is in progress. Finish or abort it first.
-              </span>
-            ) : selectedRepository?.isBare ? (
-              <span className="menu-note">Bare repositories are read-only.</span>
-            ) : (
-              <>
-              <button
-                type="button"
-                role="menuitem"
-                disabled={!selectedRepository?.currentBranch}
-                onClick={() => runOperation({ kind: 'pull' }, contextMenu.repositoryId)}
-              >
-                Pull
-              </button>
-              {selectedRepository?.head && !selectedRepository.currentBranch ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  disabled={selectedOperationInFlight}
-                  onClick={() => openPushHead(contextMenu.repositoryId)}
-                >
-                  Push HEAD…
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  role="menuitem"
-                  disabled={!selectedRepository?.currentBranch}
-                  title="Review outgoing commits, choose the target branch, and push"
-                  onClick={() => runWorkbenchCommand({ kind: 'openPushDialog' }, contextMenu.repositoryId)}
-                >
-                  Push…
-                </button>
-              )}
-              <button
-                type="button"
-                role="menuitem"
-                disabled={!selectedRepository?.currentBranch || selectedOperationInFlight}
-                title="git pull --rebase --autostash"
-                onClick={() => runOperation({ kind: 'updateProject', rebase: true }, contextMenu.repositoryId)}
-              >
-                Update Project (Rebase)
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                disabled={!selectedRepository?.currentBranch || selectedOperationInFlight}
-                title="git pull --no-rebase --autostash"
-                onClick={() => runOperation({ kind: 'updateProject', rebase: false }, contextMenu.repositoryId)}
-              >
-                Update Project (Merge)
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => runWorkbenchCommand({ kind: 'openCommitPanel' }, contextMenu.repositoryId)}
-              >
-                Commit…
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                disabled={!selectedRepository?.currentBranch}
-                onClick={() =>
-                  runOperation({ kind: 'push', forceWithLease: true }, contextMenu.repositoryId)
-                }
-              >
-                Force Push with Lease…
-              </button>
-              </>
-            )}
-            </>
-          ) : null}
           {contextMenu.kind === 'commit' ? (
             <>
               {hasContiguousCommitRange &&
