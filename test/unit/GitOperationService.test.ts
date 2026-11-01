@@ -886,6 +886,39 @@ describe('GitOperationService', () => {
     ).rejects.toThrow('rebase is in progress');
   });
 
+  it('finishes a cherry-pick whose changes are already in the branch and says so', async () => {
+    const { GitOperationService } = await import('../../src/git/GitOperationService');
+    const fixture = await createFixtureRepository();
+    await git(fixture.path, 'switch', '-q', '-c', 'feature');
+    const picked = await commitFile(fixture.path, 'shared.txt', 'shared\n', 'shared change');
+    await git(fixture.path, 'switch', '-q', 'main');
+    await commitFile(fixture.path, 'main.txt', 'main\n', 'main only');
+    await commitFile(fixture.path, 'shared.txt', 'shared\n', 'same change made again');
+    const head = await git(fixture.path, 'rev-parse', 'HEAD');
+    const service = new GitOperationService(new RealGitRunner());
+
+    const result = await service.run(fixture.summary, { kind: 'cherryPick', hash: picked });
+    expect(result.notice).toContain('already in the current branch');
+    expect(await git(fixture.path, 'rev-parse', 'HEAD')).toBe(head);
+    await expect(git(fixture.path, 'rev-parse', '-q', '--verify', 'CHERRY_PICK_HEAD')).rejects.toThrow();
+  });
+
+  it('aborts a conflicted cherry-pick with the shared Abort control', async () => {
+    const { GitOperationService } = await import('../../src/git/GitOperationService');
+    const fixture = await createFixtureRepository();
+    await git(fixture.path, 'switch', '-q', '-c', 'feature');
+    const picked = await commitFile(fixture.path, 'base.txt', 'feature\n', 'feature edit');
+    await git(fixture.path, 'switch', '-q', 'main');
+    const head = await commitFile(fixture.path, 'base.txt', 'main\n', 'main edit');
+    const service = new GitOperationService(new RealGitRunner());
+
+    await expect(service.run(fixture.summary, { kind: 'cherryPick', hash: picked })).rejects.toThrow();
+    const picking = { ...fixture.summary, operationState: 'cherry-pick' as const };
+    await service.run(picking, { kind: 'rebaseAbort' }, { confirm: () => Promise.resolve(true) });
+    expect(await git(fixture.path, 'rev-parse', 'HEAD')).toBe(head);
+    expect(await git(fixture.path, 'status', '--porcelain')).toBe('');
+  });
+
   it('rejects rebase controls after the rebase has ended', async () => {
     const { GitOperationService } = await import('../../src/git/GitOperationService');
     const run = vi.fn().mockResolvedValue(successfulResult);
@@ -895,7 +928,7 @@ describe('GitOperationService', () => {
     );
 
     await expect(service.run(repository, { kind: 'rebaseContinue' })).rejects.toThrow(
-      'No Git rebase is in progress',
+      'No Git rebase, cherry-pick or revert is in progress',
     );
     expect(run).not.toHaveBeenCalled();
   });

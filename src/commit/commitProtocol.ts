@@ -100,6 +100,7 @@ export type CommitWebviewMessage =
   | { type: 'shelve'; items: ChangeRef[]; message: string }
   | { type: 'requestAmendMessage'; repositoryId?: string }
   | { type: 'updateChecks'; checks: CommitChecks }
+  | { type: 'operationControl'; repositoryId: string; action: 'continue' | 'skip' | 'abort' }
   | { type: 'requestHunks'; item: ChangeRef }
   | { type: 'updateLayout'; layout: CommitViewLayout }
   | { type: 'saveDraft'; message: string };
@@ -276,6 +277,10 @@ export function parseCommitWebviewMessage(value: unknown): CommitWebviewMessage 
         : isId(value.repositoryId)
           ? { type: 'requestAmendMessage', repositoryId: value.repositoryId }
           : undefined;
+    case 'operationControl':
+      return isId(value.repositoryId) && (value.action === 'continue' || value.action === 'skip' || value.action === 'abort')
+        ? { type: 'operationControl', repositoryId: value.repositoryId, action: value.action }
+        : undefined;
     case 'requestHunks': {
       const [item] = parseItems([value.item]) ?? [];
       return item ? { type: 'requestHunks', item } : undefined;

@@ -75,6 +75,8 @@ export interface WorkbenchControllerOptions {
   copyToClipboard?(text: string): Promise<void>;
   operationService?: Pick<GitOperationService, 'run'>;
   confirmOperation?(confirmation: OperationConfirmation): Promise<boolean>;
+  /** Shows an informational message, such as a cherry-pick that had nothing to apply. */
+  showInformation?(message: string): void;
   withProgress?<T>(title: string, task: () => Promise<T>): Promise<T>;
   onRepositoriesChanged?(repositories: readonly RepositorySummary[]): void;
   openDiff?(
@@ -1423,6 +1425,7 @@ export class WorkbenchController {
       });
       return;
     }
+    if (result.notice) this.options.showInformation?.(result.notice);
     await this.options.postMessage({
       type: 'operationCompleted',
       requestId: message.requestId,

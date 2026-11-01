@@ -74,7 +74,7 @@ Open the **Git Log** tab in the bottom panel (`Git Log: Open Log`). Right-click 
 | Change an old commit's message | Log → right-click the commit → **Edit Commit Message…** (the working tree is not touched) |
 | Squash / reorder / drop commits | Log → right-click the oldest commit to change → **Interactively Rebase from Here…** |
 | Rebase my branch onto `master` | Fetch first, then `Git Log: Branches…` → pick `origin/master` → **Rebase '‹current›' onto 'origin/master'**. Or Log → right-click `origin/master` → **Rebase Current onto**. Or pick `origin/master` → **Pull into '‹current›' Using Rebase** to fetch + rebase in one go |
-| Resolve rebase / merge conflicts | Conflicts show in their own group in the Commit window: *Merge…*, *Accept Yours*, *Accept Theirs*, *Mark as Resolved*. Then **Continue** in the rebase bar at the top of the Log |
+| Resolve rebase / cherry-pick / merge conflicts | Conflicts show in their own group in the Commit window: *Merge…*, *Accept Yours*, *Accept Theirs*, *Mark as Resolved*. Then **Continue** (or **Skip** / **Abort**) in the bar at the top of the Commit window or the Log |
 | Push | `Git Log: Push…` or **Commit and Push…**. If the push is rejected, choose **Rebase and Push** or **Merge and Push**. After a rebase, tick *Force push (with lease)* |
 | Put work aside | Right-click files → **Shelve Changes…** (only the selected files are stashed) |
 | Throw away local changes | Right-click → **Rollback…** (`Cmd/Ctrl+Alt+Z`); for new files you can also delete the local copy |

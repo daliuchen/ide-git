@@ -315,6 +315,9 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
       case 'action':
         await this.runAction(message.action, message.items, message.preview === true);
         return;
+      case 'operationControl':
+        await this.controlOperation(message.repositoryId, message.action);
+        return;
       case 'updateChecks':
         await this.context.workspaceState.update(CHECKS_KEY, message.checks);
         return;
@@ -394,6 +397,43 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
     if (message.push) {
       for (const { repository } of committed) await this.hooks.push(repository);
     }
+  }
+
+  /** Continue, skip, or abort the merge, rebase, cherry-pick, or revert in progress. */
+  private async controlOperation(repositoryId: string, action: 'continue' | 'skip' | 'abort'): Promise<void> {
+    const snapshot = this.snapshots.get(repositoryId);
+    const state = snapshot?.repository.operationState;
+    if (!snapshot || !state) return;
+    if (action !== 'continue') {
+      const confirmed = await vscode.window.showWarningMessage(
+        action === 'skip' ? 'Skip the current commit?' : `Abort the ${state}?`,
+        {
+          modal: true,
+          detail:
+            action === 'skip'
+              ? `The commit being applied is left out and the ${state} goes on.`
+              : `${snapshot.repository.displayName} goes back to how it was before the ${state} started.`,
+        },
+        action === 'skip' ? 'Skip' : 'Abort',
+      );
+      if (!confirmed) return;
+    }
+    const args =
+      state === 'merge'
+        ? action === 'abort'
+          ? ['merge', '--abort']
+          : ['commit', '--no-edit']
+        : [state, `--${action}`];
+    if (state === 'merge' && action === 'skip') return;
+    await this.withBusy(`${action[0]?.toUpperCase() ?? ''}${action.slice(1)}…`, async () => {
+      await this.runner.run(args, {
+        cwd: fileURLToPath(snapshot.repository.rootUri),
+        timeoutMs: 10 * 60_000,
+        env: { GIT_EDITOR: 'true' },
+      });
+    });
+    this.hooks.onDidCommit?.(snapshot.repository);
+    await this.refresh();
   }
 
   private async rememberAuthor(author: string): Promise<void> {

@@ -10,6 +10,20 @@ import { GitCommandError, type GitRunner } from './GitRunner';
 export interface GitOperationResult {
   message: string;
   cancelled?: boolean;
+  /** Something the user should be told, e.g. that a cherry-pick had nothing left to apply. */
+  notice?: string;
+}
+
+/** The commands whose stop can be continued, skipped or aborted (`git <command> --continue`). */
+const SEQUENCER_COMMANDS = { rebase: 'rebase', 'cherry-pick': 'cherry-pick', revert: 'revert' } as const;
+
+/** Arguments for Continue/Skip/Abort of whatever rebase, cherry-pick or revert is in progress. */
+export function sequencerArguments(
+  state: RepositorySummary['operationState'],
+  kind: 'rebaseContinue' | 'rebaseSkip' | 'rebaseAbort',
+): string[] {
+  const command = state && state in SEQUENCER_COMMANDS ? SEQUENCER_COMMANDS[state as keyof typeof SEQUENCER_COMMANDS] : 'rebase';
+  return [command, kind === 'rebaseContinue' ? '--continue' : kind === 'rebaseSkip' ? '--skip' : '--abort'];
 }
 
 export interface GitOperationRunOptions {
@@ -347,18 +361,20 @@ export function getOperationConfirmation(
     };
   }
   if (operation.kind === 'rebaseSkip') {
+    const state = repository.operationState ?? 'rebase';
     return {
       title: 'Skip the current commit?',
-      detail: `Repository “${repository.displayName}” will omit the current commit and continue the rebase.`,
+      detail: `Repository “${repository.displayName}” will omit the current commit and continue the ${state}.`,
       confirmLabel: 'Skip Commit',
       destructive: true,
     };
   }
   if (operation.kind === 'rebaseAbort') {
+    const state = repository.operationState ?? 'rebase';
     return {
-      title: 'Abort the current rebase?',
-      detail: `Repository “${repository.displayName}” will stop rebasing and restore the branch to its pre-rebase state.`,
-      confirmLabel: 'Abort Rebase',
+      title: `Abort the current ${state}?`,
+      detail: `Repository “${repository.displayName}” will stop the ${state} and restore the branch to its state before it started.`,
+      confirmLabel: state === 'rebase' ? 'Abort Rebase' : 'Abort',
       destructive: true,
     };
   }
@@ -578,17 +594,17 @@ export class GitOperationService {
         if (
           freshRepository.operationState &&
           operation.kind !== 'fetch' &&
-          !(freshRepository.operationState === 'rebase' && isRebaseControl)
+          !(freshRepository.operationState in SEQUENCER_COMMANDS && isRebaseControl)
         ) {
           throw new Error(
             `A Git ${freshRepository.operationState} is in progress; finish or abort it first.`,
           );
         }
         if (!freshRepository.operationState && isRebaseControl) {
-          throw new Error('No Git rebase is in progress.');
+          throw new Error('No Git rebase, cherry-pick or revert is in progress.');
         }
         if (operation.kind === 'rebaseContinue' && freshRepository.hasUnresolvedConflicts) {
-          throw new Error('Resolve all conflicts before continuing the rebase.');
+          throw new Error(`Resolve all conflicts before continuing the ${freshRepository.operationState ?? 'rebase'}.`);
         }
         if (operation.kind === 'deleteRemoteBranch') {
           await this.validateRemoteBranchDeletion(freshRepository, operation.remote, operation.branch);
@@ -679,8 +695,16 @@ export class GitOperationService {
           await this.dropFileChanges(freshRepository, preparedOperation.hash, preparedOperation.paths);
         } else if (preparedOperation.kind === 'getFromRevision') {
           await this.getFromRevision(freshRepository, preparedOperation.hash, preparedOperation.paths);
+        } else if (preparedOperation.kind === 'cherryPick') {
+          return this.cherryPick(freshRepository, preparedOperation.hash);
         } else {
-          await this.runner.run(buildOperationArguments(preparedOperation, forceSourceHash), {
+          const args =
+            preparedOperation.kind === 'rebaseContinue' ||
+            preparedOperation.kind === 'rebaseSkip' ||
+            preparedOperation.kind === 'rebaseAbort'
+              ? sequencerArguments(freshRepository.operationState, preparedOperation.kind)
+              : buildOperationArguments(preparedOperation, forceSourceHash);
+          await this.runner.run(args, {
             cwd: fileURLToPath(freshRepository.rootUri),
             timeoutMs: 10 * 60_000,
             ...(preparedOperation.kind === 'rebaseContinue'
@@ -921,6 +945,35 @@ export class GitOperationService {
       timeoutMs: 60_000,
       input: patch.stdout,
     });
+  }
+
+  /**
+   * Cherry-picks one commit. When its change is already in the branch, Git stops with nothing to
+   * commit; that stop is skipped right away and reported, instead of leaving a pick in progress.
+   */
+  private async cherryPick(repository: RepositorySummary, hash: string): Promise<GitOperationResult> {
+    const cwd = fileURLToPath(repository.rootUri);
+    try {
+      await this.runner.run(['cherry-pick', validateHash(hash)], { cwd, timeoutMs: 10 * 60_000 });
+      return { message: 'cherryPick completed.' };
+    } catch (error) {
+      if (!(error instanceof GitCommandError) || error.cancelled) throw error;
+      const stillPicking = await this.runner
+        .run(['rev-parse', '-q', '--verify', 'CHERRY_PICK_HEAD'], { cwd, timeoutMs: 30_000 })
+        .then(() => true, () => false);
+      const conflicted = await this.runner
+        .run(['diff', '--name-only', '--diff-filter=U'], { cwd, timeoutMs: 30_000 })
+        .then((result) => result.stdout.toString('utf8').trim() !== '');
+      const nothingStaged = await this.runner
+        .run(['diff', '--cached', '--quiet'], { cwd, timeoutMs: 30_000 })
+        .then(() => true, () => false);
+      if (!stillPicking || conflicted || !nothingStaged) throw error;
+      await this.runner.run(['cherry-pick', '--skip'], { cwd, timeoutMs: 60_000 });
+      return {
+        message: 'cherryPick completed.',
+        notice: `Nothing to cherry-pick: the changes of ${hash.slice(0, 8)} are already in the current branch.`,
+      };
+    }
   }
 
   private async getFromRevision(repository: RepositorySummary, hash: string, paths: readonly string[]): Promise<void> {

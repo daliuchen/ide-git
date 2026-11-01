@@ -149,6 +149,25 @@ function MenuItem({ label, shortcut, disabled, onSelect }: { label: string; shor
   );
 }
 
+const OPERATION_NAMES: Record<string, string> = {
+  rebase: 'Rebasing',
+  'cherry-pick': 'Cherry-picking',
+  revert: 'Reverting',
+  merge: 'Merging',
+};
+
+/** What is going on and what to do next, for a merge, rebase, cherry-pick, or revert in progress. */
+function operationText(repository: CommitViewRepository, conflicts: number, hasChanges: boolean): string {
+  const state = repository.operationState ?? '';
+  const doing = `${OPERATION_NAMES[state] ?? state} in ${repository.name}`;
+  if (conflicts) return `${doing}: resolve ${plural(conflicts, 'conflict')}, then Continue.`;
+  if (state === 'merge') return `${doing}: commit to finish it, or Abort.`;
+  if (!hasChanges && state === 'cherry-pick') {
+    return `${doing}: its changes are already in this branch, so there is nothing to commit. Skip it.`;
+  }
+  return `${doing}: conflicts are resolved. Continue to commit and go on.`;
+}
+
 export function CommitApp() {
   const [data, setData] = useState<ViewData>({
     repositories: [],
@@ -371,6 +390,9 @@ export function CommitApp() {
   );
   const conflicts = data.changes.filter((change) => change.status === 'U').length;
   const operationRepository = data.repositories.find((repository) => repository.operationState);
+  const operationHasChanges = data.changes.some(
+    (change) => change.repositoryId === operationRepository?.id && change.status !== '?',
+  );
 
   const runAction = useCallback(
     (action: CommitAction, changes: readonly CommitViewChange[], preview = false) => {
@@ -803,12 +825,40 @@ export function CommitApp() {
         ) : null}
       </header>
       <div className="banners">
-        {operationRepository ? (
-          <div className="operation-banner">
+        {operationRepository?.operationState ? (
+          <div className="operation-banner" role="status">
             <i className="codicon codicon-info" />
-            {operationRepository.operationState === 'rebase'
-              ? `Rebasing ${operationRepository.name} — resolve conflicts, then continue the rebase from the Git Log.`
-              : `${operationRepository.operationState ?? ''} in progress in ${operationRepository.name}${conflicts ? ` — ${plural(conflicts, 'conflict')} to resolve` : ' — commit to conclude it'}.`}
+            <span className="operation-text">{operationText(operationRepository, conflicts, operationHasChanges)}</span>
+            <span className="operation-actions">
+              {operationRepository.operationState !== 'merge' ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={Boolean(busy) || conflicts > 0}
+                    title={conflicts ? 'Resolve the conflicts first' : `Continue the ${operationRepository.operationState}`}
+                    onClick={() => post({ type: 'operationControl', repositoryId: operationRepository.id, action: 'continue' })}
+                  >
+                    Continue
+                  </button>
+                  <button
+                    type="button"
+                    disabled={Boolean(busy)}
+                    title="Leave out the commit being applied"
+                    onClick={() => post({ type: 'operationControl', repositoryId: operationRepository.id, action: 'skip' })}
+                  >
+                    Skip
+                  </button>
+                </>
+              ) : null}
+              <button
+                type="button"
+                disabled={Boolean(busy)}
+                title={`Stop the ${operationRepository.operationState} and go back to where it started`}
+                onClick={() => post({ type: 'operationControl', repositoryId: operationRepository.id, action: 'abort' })}
+              >
+                Abort
+              </button>
+            </span>
           </div>
         ) : null}
         {data.repositories.some((repository) => repository.truncated) ? <div className="operation-banner">Only the first 5000 changes are shown.</div> : null}

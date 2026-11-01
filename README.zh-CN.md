@@ -74,7 +74,7 @@ cursor --install-extension git-log-plus-0.3.0.vsix   # VS Code 用 code --instal
 | 改某个旧提交的信息 | Log 里右键该提交 → **Edit Commit Message…**（不动工作区） |
 | squash / 调整顺序 / 删除提交 | Log 里右键要改的最早那个提交 → **Interactively Rebase from Here…** |
 | 把我的分支 rebase 到 `master` | 先 Fetch，再 `Git Log: Branches…` → 选 `origin/master` → **Rebase '当前分支' onto 'origin/master'**；或 Log 里右键 `origin/master` → **Rebase Current onto**；或选 `origin/master` → **Pull into '当前分支' Using Rebase**，一步完成 fetch + rebase。注意先提交或 Shelve 掉未提交的改动 |
-| 解决 rebase / merge 冲突 | 冲突文件在 Commit 窗口单独成组：*Merge…*、*Accept Yours*、*Accept Theirs*、*Mark as Resolved*；然后点 Log 顶部 rebase 提示条的 **Continue** |
+| 解决 rebase / cherry-pick / merge 冲突 | 冲突文件在 Commit 窗口单独成组：*Merge…*、*Accept Yours*、*Accept Theirs*、*Mark as Resolved*；然后点 Commit 窗口或 Log 顶部提示条的 **Continue**（或 **Skip** / **Abort**） |
 | 推送 | `Git Log: Push…` 或 **Commit and Push…**。被拒时选 **Rebase and Push** 或 **Merge and Push**；rebase 过的分支要勾 *Force push (with lease)* |
 | 把改动先收起来 | 文件右键 → **Shelve Changes…**（只收选中的文件） |
 | 丢弃本地改动 | 右键 → **Rollback…**（`Cmd/Ctrl+Alt+Z`）；新增的文件可以顺便删掉 |

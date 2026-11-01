@@ -117,6 +117,9 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
         );
         return selected === confirmation.confirmLabel;
       },
+      showInformation: (message) => {
+        void vscode.window.showInformationMessage(message);
+      },
       withProgress: (title, task) =>
         Promise.resolve(
           vscode.window.withProgress(

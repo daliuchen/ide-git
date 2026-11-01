@@ -103,7 +103,12 @@ function filtersEqual(left: LogFilters, right: LogFilters): boolean {
 }
 
 function operationStateLabel(state: NonNullable<RepositorySummary['operationState']>): string {
-  return state === 'rebase' ? 'Rebasing' : state;
+  return { rebase: 'Rebasing', 'cherry-pick': 'Cherry-picking', revert: 'Reverting', merge: 'Merging' }[state];
+}
+
+/** States that stop between commits and can be continued, skipped, or aborted from the Log. */
+function isSequencerState(state: RepositorySummary['operationState']): boolean {
+  return state === 'rebase' || state === 'cherry-pick' || state === 'revert';
 }
 
 interface WorkbenchState {
@@ -2177,7 +2182,7 @@ export function App() {
               ))}
             </select>
             {selectedRepository?.operationState &&
-            selectedRepository.operationState !== 'rebase' ? (
+            !isSequencerState(selectedRepository.operationState) ? (
               <button
                 className="operation-badge"
                 type="button"
@@ -2195,7 +2200,7 @@ export function App() {
             ) : null}
           </div>
         ) : selectedRepository?.operationState &&
-          selectedRepository.operationState !== 'rebase' ? (
+          !isSequencerState(selectedRepository.operationState) ? (
           <button
             className="operation-badge"
             type="button"
@@ -3141,11 +3146,11 @@ export function App() {
           }
         >
           {commitToolbar}
-          {selectedRepository?.operationState === 'rebase' ? (
+          {selectedRepository?.operationState && isSequencerState(selectedRepository.operationState) ? (
             <div
               className="rebase-status-row"
               role="toolbar"
-              aria-label="Rebase in progress"
+              aria-label={`${selectedRepository.operationState === 'rebase' ? 'Rebase' : selectedRepository.operationState === 'revert' ? 'Revert' : 'Cherry-pick'} in progress`}
             >
               <button
                 className="operation-badge"
@@ -3159,7 +3164,7 @@ export function App() {
                   })
                 }
               >
-                Rebasing
+                {operationStateLabel(selectedRepository.operationState)}
               </button>
               <div className="rebase-actions" role="group" aria-label="Rebase actions">
                 <button
@@ -3171,8 +3176,8 @@ export function App() {
                   }
                   title={
                     selectedRepository.hasUnresolvedConflicts
-                      ? 'Resolve all conflicts before continuing the rebase'
-                      : 'Continue rebase'
+                      ? `Resolve all conflicts before continuing the ${selectedRepository.operationState}`
+                      : `Continue ${selectedRepository.operationState}`
                   }
                   onClick={() => runOperation({ kind: 'rebaseContinue' })}
                 >
