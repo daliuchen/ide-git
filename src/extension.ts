@@ -507,6 +507,32 @@ export function activate(context: vscode.ExtensionContext): void {
     (repository) => dialogs.openPush(repository),
     (repository, ref) => workbenchProvider.showBranchComparison(repository.id, ref),
   );
+  const showCommitInLogCommand = vscode.commands.registerCommand(
+    'gitLogWorkbench.showCommitInLog',
+    async (root?: unknown, hash?: unknown) => {
+      let target: { root: string; hash: string } | 'uncommitted' | undefined;
+      if (typeof root === 'string' && typeof hash === 'string') {
+        target = { root, hash };
+      } else {
+        const editor = vscode.window.activeTextEditor;
+        if (editor?.document.uri.scheme !== 'file') {
+          void vscode.window.showInformationMessage('Open a file in a Git repository first.');
+          return;
+        }
+        target = await fileAnnotations.commitAt(editor.document, editor.selection.active.line);
+      }
+      if (target === 'uncommitted') {
+        void vscode.window.showInformationMessage('This line has not been committed yet.');
+        return;
+      }
+      const repository = target ? await inspectRepository(target.root, runner) : undefined;
+      if (!target || !repository) {
+        void vscode.window.showInformationMessage('No commit found for this line.');
+        return;
+      }
+      await workbenchProvider.revealCommit(repository, target.hash);
+    },
+  );
   const branchesCommand = vscode.commands.registerCommand('gitLogWorkbench.branches', async (resource?: unknown) => {
     const repository = await resolveRepository(resource);
     if (repository) await branchesPopup.show(repository);
@@ -611,6 +637,7 @@ export function activate(context: vscode.ExtensionContext): void {
     amendChangeCommand,
     fileAnnotations,
     annotationToggle,
+    showCommitInLogCommand,
     dialogs,
     branchesCommand,
     compareWithLocalCommand,

@@ -94,6 +94,32 @@ export class FileAnnotationController implements vscode.Disposable {
     );
   }
 
+  /**
+   * The commit that last changed `line` of the document: from the annotation when the file is
+   * annotated, otherwise from a one-line blame of the editor's current text.
+   */
+  async commitAt(
+    document: vscode.TextDocument,
+    line: number,
+  ): Promise<{ root: string; hash: string } | 'uncommitted' | undefined> {
+    const annotated = this.annotated.get(document.uri.toString());
+    const known = annotated?.lines[line];
+    if (annotated && known) {
+      return UNCOMMITTED.test(known.hash) ? 'uncommitted' : { root: annotated.root, hash: known.hash };
+    }
+    const repository = await inspectRepository(dirname(document.uri.fsPath), this.runner);
+    if (!repository) return undefined;
+    const root = realPath(vscode.Uri.parse(repository.rootUri).fsPath);
+    const path = relative(root, realPath(document.uri.fsPath)).split('\\').join('/');
+    const result = await this.runner.run(
+      ['blame', '--porcelain', '-L', `${String(line + 1)},${String(line + 1)}`, '--contents', '-', '--', path],
+      { cwd: root, timeoutMs: 60_000, input: document.getText() },
+    );
+    const [blamed] = parseBlamePorcelain(result.stdout.toString('utf8'));
+    if (!blamed) return undefined;
+    return UNCOMMITTED.test(blamed.hash) ? 'uncommitted' : { root, hash: blamed.hash };
+  }
+
   isAnnotated(uri: vscode.Uri): boolean {
     return this.annotated.has(uri.toString());
   }
@@ -191,7 +217,11 @@ export class FileAnnotationController implements vscode.Disposable {
           : `${formatDate(line.authorTime)}  ${truncate(line.author, authorWidth)}`;
         const hover = new vscode.MarkdownString(undefined, true);
         hover.isTrusted = {
-          enabledCommands: ['gitLogWorkbench.annotate.showDiff', 'gitLogWorkbench.annotate.copyHash'],
+          enabledCommands: [
+            'gitLogWorkbench.showCommitInLog',
+            'gitLogWorkbench.annotate.showDiff',
+            'gitLogWorkbench.annotate.copyHash',
+          ],
         };
         if (uncommitted) {
           hover.appendMarkdown('**Not committed yet**');
@@ -210,7 +240,7 @@ export class FileAnnotationController implements vscode.Disposable {
           hover.appendMarkdown('\n\n');
           hover.appendText(line.summary);
           hover.appendMarkdown(
-            `\n\n[$(diff) Show Diff](command:gitLogWorkbench.annotate.showDiff?${args}) · [$(copy) Copy Hash](command:gitLogWorkbench.annotate.copyHash?${encodeURIComponent(JSON.stringify([line.hash]))})`,
+            `\n\n[$(git-commit) Show in Git Log](command:gitLogWorkbench.showCommitInLog?${encodeURIComponent(JSON.stringify([annotation.root, line.hash]))}) · [$(diff) Show Diff](command:gitLogWorkbench.annotate.showDiff?${args}) · [$(copy) Copy Hash](command:gitLogWorkbench.annotate.copyHash?${encodeURIComponent(JSON.stringify([line.hash]))})`,
           );
         }
         options.push({

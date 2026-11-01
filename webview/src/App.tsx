@@ -523,6 +523,10 @@ export function App() {
   const [detailsHashCopyState, setDetailsHashCopyState] = useState<
     'idle' | 'copying' | 'copied'
   >('idle');
+  const [commitRevealTarget, setCommitRevealTarget] = useState<
+    { repositoryId: string; hash: string; requestId: number } | undefined
+  >();
+  const commitRevealSequence = useRef(0);
   const [collapsedRefGroups, setCollapsedRefGroups] = useState<Set<string>>(new Set());
   const [collapsedRefFolders, setCollapsedRefFolders] = useState<Set<string>>(new Set());
   const filterTimer = useRef<number | undefined>(undefined);
@@ -944,6 +948,14 @@ export function App() {
           if (selectedRepositoryIdRef.current !== message.repositoryId) {
             requestScopeById.current.delete(message.requestId);
             break;
+          }
+          if (message.revealHash) {
+            commitRevealSequence.current += 1;
+            setCommitRevealTarget({
+              repositoryId: message.repositoryId,
+              hash: message.revealHash,
+              requestId: commitRevealSequence.current,
+            });
           }
           if (
             requestScopeById.current.get(message.requestId) === 'log' &&
@@ -3311,6 +3323,16 @@ export function App() {
                   ? `history:${state.history.repositoryId}:${state.history.path}`
                   : `log:${state.selectedRepositoryId ?? ''}:${String(state.startLogOffset)}`
               }
+              {...(!state.history && commitRevealTarget && commitRevealTarget.repositoryId === state.selectedRepositoryId
+                ? {
+                    revealTarget: {
+                      hash: commitRevealTarget.hash,
+                      requestId: commitRevealTarget.requestId,
+                      listRevision: state.commitListRevision,
+                      minimumListRevision: 0,
+                    },
+                  }
+                : {})}
               onScrollTopChange={handleCommitScrollTopChange}
               onHorizontalScroll={syncLogHeaderScroll}
               onSelect={selectCommit}

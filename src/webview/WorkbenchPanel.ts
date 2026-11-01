@@ -41,6 +41,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
     | { kind: 'editor'; request: EditorHistoryRequest }
     | { kind: 'folder'; request: FolderHistoryRequest }
     | { kind: 'compare'; repositoryId: string; ref: string }
+    | { kind: 'reveal'; repository: RepositorySummary; hash: string }
     | undefined;
 
   constructor(
@@ -202,6 +203,13 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
     await this.flushPendingHistory();
   }
 
+  /** Open the Log with `hash` selected and scrolled into view. */
+  async revealCommit(repository: RepositorySummary, hash: string): Promise<void> {
+    this.pendingHistoryRequest = { kind: 'reveal', repository, hash };
+    await vscode.commands.executeCommand('gitLogWorkbench.log.focus');
+    await this.flushPendingHistory();
+  }
+
   /** Open the Log listing the commits in `ref` that the current branch does not have. */
   async showBranchComparison(repositoryId: string, ref: string): Promise<void> {
     this.pendingHistoryRequest = { kind: 'compare', repositoryId, ref };
@@ -231,8 +239,11 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       await session.controller.openEditorHistory(request.request);
     } else if (request.kind === 'folder') {
       await session.controller.openFolderHistory(request.request);
-    } else {
+    } else if (request.kind === 'compare') {
       await session.controller.showBranchComparison(request.repositoryId, request.ref);
+    } else {
+      const note = await session.controller.revealCommit(request.repository, request.hash);
+      if (note) void vscode.window.showInformationMessage(note);
     }
   }
 

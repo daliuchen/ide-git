@@ -51,6 +51,7 @@
     "onCommand:gitLogWorkbench.push",
     "onCommand:gitLogWorkbench.updateProject",
     "onCommand:gitLogWorkbench.editor.toggleAnnotate",
+    "onCommand:gitLogWorkbench.showCommitInLog",
     "onCommand:gitLogWorkbench.branches",
     "onCommand:gitLogWorkbench.editor.commitChange",
     "onCommand:gitLogWorkbench.editor.amendChange"
@@ -111,6 +112,11 @@
         "title": "Update Project…",
         "category": "IDE Git",
         "icon": "$(repo-pull)"
+      },
+      {
+        "command": "gitLogWorkbench.showCommitInLog",
+        "title": "Show Commit in Git Log",
+        "category": "IDE Git"
       },
       {
         "command": "gitLogWorkbench.editor.toggleAnnotate",
@@ -198,14 +204,19 @@
           "group": "0_annotate@1"
         },
         {
+          "command": "gitLogWorkbench.showCommitInLog",
+          "when": "resourceScheme == file && !editorHasSelection",
+          "group": "0_annotate@2"
+        },
+        {
           "command": "gitLogWorkbench.editor.commitChange",
           "when": "resourceScheme == file",
-          "group": "0_annotate@2"
+          "group": "0_annotate@3"
         },
         {
           "command": "gitLogWorkbench.editor.amendChange",
           "when": "resourceScheme == file",
-          "group": "0_annotate@3"
+          "group": "0_annotate@4"
         },
         {
           "command": "gitLogWorkbench.editor.showLineHistory",

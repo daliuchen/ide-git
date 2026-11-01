@@ -249,6 +249,8 @@ export type ExtensionToWebviewMessage =
       scrollTop?: number;
       startLogOffset?: number;
       graphContinuation?: GraphContinuationState;
+      /** Scroll this commit into view once the rows are shown (Show in Git Log). */
+      revealHash?: string;
       replace: boolean;
       hasMore: boolean;
     }

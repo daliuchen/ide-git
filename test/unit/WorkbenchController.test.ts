@@ -731,6 +731,66 @@ describe('WorkbenchController', () => {
     });
   });
 
+  it('reveals a commit beyond the first page with default filters, selected and scrolled to', async () => {
+    const repository = await createRepository();
+    // CI machines have no Git identity, so every commit names its author.
+    const identity = {
+      GIT_AUTHOR_NAME: 'Alice',
+      GIT_AUTHOR_EMAIL: 'alice@example.com',
+      GIT_COMMITTER_NAME: 'Alice',
+      GIT_COMMITTER_EMAIL: 'alice@example.com',
+    };
+    for (let index = 1; index <= 40; index += 1) {
+      const date = `2026-01-01T00:${String(index).padStart(2, '0')}:00Z`;
+      await execFileAsync('git', ['commit', '--allow-empty', '-m', `commit ${String(index)}`], {
+        cwd: repository,
+        env: { ...process.env, ...identity, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date },
+      });
+    }
+    const target = (await execFileAsync('git', ['rev-parse', 'HEAD~30'], { cwd: repository })).stdout.trim();
+    await execFileAsync('git', ['switch', '-q', '-c', 'side', 'HEAD~35'], { cwd: repository });
+    await execFileAsync('git', ['commit', '--allow-empty', '-m', 'side only'], {
+      cwd: repository,
+      env: { ...process.env, ...identity },
+    });
+    const sideOnly = (await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: repository })).stdout.trim();
+    await execFileAsync('git', ['switch', '-q', 'main'], { cwd: repository });
+    const summary = await inspectRepository(repository, new GitRunner());
+    if (!summary) throw new Error('Expected a repository');
+
+    const messages: ExtensionToWebviewMessage[] = [];
+    const controller = new (await import('../../src/webview/WorkbenchController')).WorkbenchController({
+      workspaceRoots: [],
+      gitService: new GitService(new GitRunner()),
+      gitRunner: new GitRunner(),
+      scanDepth: 0,
+      initialPageSize: 10,
+      pageSize: 10,
+      initialLayout: { refsWidth: 220, filesWidth: 320, detailsHeight: 156, filesViewMode: 'tree' },
+      postMessage(message: ExtensionToWebviewMessage) {
+        messages.push(message);
+        return Promise.resolve(true);
+      },
+      persistLayout: () => Promise.resolve(),
+    });
+
+    expect(await controller.revealCommit(summary, target)).toBeUndefined();
+    const data = messages.filter((message) => message.type === 'repositoryData').at(-1);
+    if (data?.type !== 'repositoryData') throw new Error('Expected repositoryData');
+    // HEAD is “commit 40”, so the target is row 30; five rows of context stay above it.
+    expect(data.startLogOffset).toBe(25);
+    expect(data.revealHash).toBe(target);
+    expect(data.selectedHash).toBe(target);
+    expect(data.filters).toMatchObject({ text: '', branches: [], authors: [], paths: [] });
+    expect(data.commits.map((commit) => commit.hash)).toContain(target);
+
+    expect(await controller.revealCommit(summary, sideOnly)).toContain('not in the current branch');
+    const fallback = messages.filter((message) => message.type === 'repositoryData').at(-1);
+    if (fallback?.type !== 'repositoryData') throw new Error('Expected repositoryData');
+    expect(fallback.filters.text).toBe(sideOnly);
+    expect(fallback.commits.map((commit) => commit.hash)).toEqual([sideOnly]);
+  });
+
   it('confirms a successful clipboard write back to the webview', async () => {
     const messages: ExtensionToWebviewMessage[] = [];
     const copyToClipboard = vi.fn().mockResolvedValue(undefined);
