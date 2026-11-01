@@ -46,7 +46,7 @@ Uninstall the original **Git Log** (`ascenx.git-log`) first if you have it.
 | Resolve conflicts | Handle them in the Commit window, then **Continue** (or **Skip** / **Abort**) in the banner |
 | Push or pull | **Push…** / **Pull** on the Log toolbar |
 | Put work aside | Right-click files → **Shelve Changes…** |
-| See who changed each line | Editor right-click → *IDE Git → Annotate with Git Blame* |
+| See who changed each line | Editor right-click → *IDE Git → Annotate with Git Blame*; hover a line → **Show in Git Log** to jump to its commit |
 
 ## Screenshots
 

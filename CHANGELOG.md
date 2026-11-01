@@ -4,6 +4,7 @@ All notable changes to Git Log are documented in this file.
 
 ## Unreleased
 
+- Show in Git Log: from the Annotate hover, the editor context menu (*IDE Git → Show Commit in Git Log*) or the command palette, open the Log with the commit of the current line selected and scrolled into view, even far back in history. Log filters go back to the default; a commit outside the current branch is shown on its own.
 - Annotate: every line shows its date and author in an even-width column, the age tint no longer lets indent guides show through, the column lines up with the code, and the end-of-line blame is hidden while a file is annotated.
 - Annotate works for files reached through a symlinked path (for example under /tmp on macOS).
 

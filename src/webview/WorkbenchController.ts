@@ -45,6 +45,9 @@ interface FolderHistorySession {
   previousSelectedHashes?: string[];
 }
 
+/** Rows kept above a revealed commit. */
+const REVEAL_CONTEXT_ROWS = 5;
+
 function cloneFilters(filters: LogFilters): LogFilters {
   return {
     ...filters,
@@ -567,6 +570,63 @@ export class WorkbenchController {
     }
   }
 
+  /**
+   * Shows a commit in the Log: filters go back to the default (HEAD), the page around the commit
+   * is loaded, and the commit is selected and scrolled into view. A commit that HEAD cannot reach
+   * is shown on its own through a hash search. Returns a note for the user in that case.
+   */
+  async revealCommit(repository: RepositorySummary, hash: string): Promise<string | undefined> {
+    if (!/^[0-9a-f]{7,64}$/u.test(hash)) throw new Error('Invalid commit hash.');
+    this.repositories.set(repository.id, this.repositories.get(repository.id) ?? repository);
+    const requestId = `reveal-commit-${String(++this.automaticRequestSequence)}`;
+    this.selectionRequestSequence += 1;
+    const transitionSequence = ++this.repositorySelectionSequence;
+    await this.leaveFolderHistory(requestId);
+    if (transitionSequence !== this.repositorySelectionSequence) return undefined;
+    const index = await this.indexInHeadHistory(fileURLToPath(repository.rootUri), hash);
+    if (transitionSequence !== this.repositorySelectionSequence) return undefined;
+    const switching = this.selectedRepositoryId !== repository.id;
+    this.selectedRepositoryId = repository.id;
+    this.filters.set(repository.id, { ...cloneFilters(EMPTY_LOG_FILTERS), ...(index < 0 ? { text: hash } : {}) });
+    // A few rows above the commit stay visible, so it does not sit at the very top.
+    const offset = Math.max(0, index - REVEAL_CONTEXT_ROWS);
+    this.logOffsets.set(repository.id, offset);
+    this.scrollTops.set(repository.id, 0);
+    this.graphContinuations.delete(repository.id);
+    this.selectedCommits.set(repository.id, hash);
+    this.selectedCommitRanges.set(repository.id, [hash]);
+    await this.persistWorkbenchState();
+    if (switching) {
+      this.options.onRepositoriesChanged?.([...this.repositories.values()]);
+      await this.options.postMessage({
+        type: 'repositoriesUpdated',
+        requestId,
+        repositories: [...this.repositories.values()],
+        selectedRepositoryId: repository.id,
+      });
+    }
+    this.logAbortController?.abort();
+    const logSequence = ++this.logRequestSequence;
+    await this.loadRepository(repository.id, requestId, true, offset, logSequence, hash);
+    return index < 0 ? 'The commit is not in the current branch, so only that commit is shown.' : undefined;
+  }
+
+  /** Position of `hash` in the default Log (`git log --date-order HEAD`), or -1. */
+  private async indexInHeadHistory(cwd: string, hash: string): Promise<number> {
+    try {
+      const result = await this.options.gitRunner.run(['rev-list', '--date-order', 'HEAD'], {
+        cwd,
+        timeoutMs: 60_000,
+        maxStdoutBytes: 512 * 1024 * 1024,
+      });
+      const lines = result.stdout.toString('utf8').split('\n');
+      return lines.findIndex((line) => line.startsWith(hash));
+    } catch (error) {
+      if (error instanceof GitCommandError && !error.cancelled) return -1;
+      throw error;
+    }
+  }
+
   /** Show the commits in `ref` that HEAD does not have (`HEAD..ref`) in the Log. */
   async showBranchComparison(repositoryId: string, ref: string): Promise<void> {
     this.requireRepository(repositoryId);
@@ -1056,6 +1116,7 @@ export class WorkbenchController {
     replace: boolean,
     skip: number,
     logSequence: number,
+    revealHash?: string,
   ): Promise<void> {
     if (logSequence !== this.logRequestSequence) return;
     const repository = this.requireRepository(repositoryId);
@@ -1166,6 +1227,7 @@ export class WorkbenchController {
               : {}),
           }
         : {}),
+      ...(revealHash ? { revealHash } : {}),
       replace,
       hasMore,
     });

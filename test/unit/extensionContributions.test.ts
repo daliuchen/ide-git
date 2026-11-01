@@ -164,6 +164,7 @@ describe('extension contributions', () => {
     );
     expect(packageJson.contributes?.menus?.['gitLogWorkbench.editorContext']).toEqual([
       expect.objectContaining({ command: 'gitLogWorkbench.editor.toggleAnnotate' }),
+      expect.objectContaining({ command: 'gitLogWorkbench.showCommitInLog' }),
       expect.objectContaining({ command: 'gitLogWorkbench.editor.commitChange' }),
       expect.objectContaining({ command: 'gitLogWorkbench.editor.amendChange' }),
       expect.objectContaining({
