@@ -2,6 +2,11 @@
 
 All notable changes to Git Log are documented in this file.
 
+## Unreleased
+
+- Annotate: every line shows its date and author in an even-width column, the age tint no longer lets indent guides show through, the column lines up with the code, and the end-of-line blame is hidden while a file is annotated.
+- Annotate works for files reached through a symlinked path (for example under /tmp on macOS).
+
 ## 0.3.0
 
 - Renamed to **IDE Git** (`EthanLiuChen.ide-git`); commands are now under “IDE Git:”, and the editor and Explorer submenus are “IDE Git”. Uninstall `daliuchen.git-log-plus` when upgrading.
