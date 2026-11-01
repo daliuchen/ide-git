@@ -4333,7 +4333,7 @@ export function App() {
                   >
                     New Branch from…
                   </button>
-                  {contextMenu.ref.kind === 'local' ? (
+                  {contextMenu.ref.kind === 'local' || contextMenu.ref.kind === 'remote' ? (
                     <>
                       <button
                         type="button"

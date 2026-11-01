@@ -2932,6 +2932,12 @@ describe('WorkbenchApp', () => {
       filters: { compare: { ref: 'refs/heads/feature/login', direction: 'notInHead' } },
     });
 
+    fireEvent.contextMenu(screen.getByTitle('refs/remotes/origin/release'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rebase Current onto' }));
+    expect(postedMessages).toContainEqual(
+      expect.objectContaining({ type: 'runOperation', operation: { kind: 'rebase', ref: 'origin/release' } }),
+    );
+
     fireEvent.click(screen.getByRole('button', { name: 'Clear branch filter' }));
     const cleared = postedMessages.at(-1) as { filters: { compare?: unknown; branches: string[] } };
     expect(cleared.filters.compare).toBeUndefined();

@@ -21,7 +21,7 @@ describe('extension contributions', () => {
   it('keeps local README links pointed at files in the repository', async () => {
     const missing: string[] = [];
 
-    for (const file of ['README.md', 'README.zh-CN.md']) {
+    for (const file of ['README.md', 'README.en.md']) {
       const markdown = await readFile(file, 'utf8');
       for (const match of markdown.matchAll(/\]\(([^)#]+)(?:#[^)]+)?\)/g)) {
         const target = match[1];
@@ -102,7 +102,7 @@ describe('extension contributions', () => {
 
     const files = [
       'README.md',
-      'README.zh-CN.md',
+      'README.en.md',
       'CONTRIBUTING.md',
       'LICENSE',
       'package.json',
