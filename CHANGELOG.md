@@ -2,6 +2,10 @@
 
 All notable changes to IDE Git are documented in this file.
 
+## 0.4.1
+
+- The Commit window, Git Log and dialogs no longer stay blank when they open while the extension is being installed or updated (the bundled script can be missing for a moment): the view reloads itself a few times, and if it still cannot start it says to run *Developer: Reload Window* instead of showing nothing.
+
 ## 0.4.0
 
 - Show in Git Log: from the Annotate hover, the editor context menu (*IDE Git → Show Commit in Git Log*) or the command palette, open the Log with the commit of the current line selected and scrolled into view, even far back in history. Log filters go back to the default; a commit outside the current branch is shown on its own.

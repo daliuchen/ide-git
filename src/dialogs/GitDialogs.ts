@@ -10,6 +10,7 @@ import type { GitOperationRequest } from '../protocol/messages';
 import type { RepositoryRegistry } from '../repositories/RepositoryRegistry';
 import type { RepositorySummary } from '../shared/models';
 import { createWebviewHtml } from '../webview/createWebviewHtml';
+import { loadWebview } from '../webview/loadWebview';
 import { isPushRejected } from './pushRejection';
 import {
   parseDialogMessage,
@@ -338,12 +339,15 @@ export class GitDialogs implements vscode.Disposable {
       localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist')],
     });
     this.panels.add(panel);
-    panel.webview.html = createWebviewHtml({
-      cspSource: panel.webview.cspSource,
-      scriptUri: panel.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', 'dialog.js')).toString(),
-      styleUri: panel.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', 'dialog.css')).toString(),
-      nonce: randomBytes(18).toString('base64url'),
-    });
+    const webviewLoad = loadWebview(panel.webview, () =>
+      createWebviewHtml({
+        cspSource: panel.webview.cspSource,
+        scriptUri: panel.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', 'dialog.js')).toString(),
+        styleUri: panel.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'dist', 'dialog.css')).toString(),
+        nonce: randomBytes(18).toString('base64url'),
+      }),
+    );
+    panel.onDidDispose(() => webviewLoad.dispose());
     const post = async (message: DialogExtensionMessage): Promise<void> => {
       await panel.webview.postMessage(message);
     };
