@@ -914,12 +914,19 @@ export function CommitApp() {
             type="button"
             className={`options-button${enabledChecks || author ? ' has-options' : ''}`}
             title="Commit options: author and commit checks"
-            onClick={() => setOptionsOpen((open) => !open)}
+            onClick={() => {
+              // One popup at a time: options and message history share the same corner.
+              setHistoryOpen(false);
+              setOptionsOpen((open) => !open);
+            }}
           >
             <i className="codicon codicon-gear" />
             {enabledChecks || author ? <span className="options-count">{enabledChecks + (author ? 1 : 0)}</span> : null}
           </button>
-          <button type="button" className="history-button" title="Commit Message History" disabled={!data.messageHistory.length} onClick={() => setHistoryOpen((open) => !open)}>
+          <button type="button" className="history-button" title="Commit Message History" disabled={!data.messageHistory.length} onClick={() => {
+              setOptionsOpen(false);
+              setHistoryOpen((open) => !open);
+            }}>
             <i className="codicon codicon-history" />
           </button>
           {historyOpen ? (

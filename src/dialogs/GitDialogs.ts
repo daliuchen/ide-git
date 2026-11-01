@@ -66,6 +66,38 @@ export class GitDialogs implements vscode.Disposable {
     for (const panel of [...this.panels]) panel.dispose();
   }
 
+  /** Asks for a remote when the repository has none, like an IDE's “Define remote”. */
+  private async defineRemote(repository: RepositorySummary): Promise<boolean> {
+    const choice = await vscode.window.showWarningMessage(
+      `Repository “${repository.displayName}” has no remote to push to.`,
+      { modal: true, detail: 'Define a remote (for example origin → https://github.com/you/repo.git), then push.' },
+      'Define Remote…',
+    );
+    if (choice !== 'Define Remote…') return false;
+    const url = await vscode.window.showInputBox({
+      title: 'Define Remote',
+      prompt: 'Remote URL',
+      placeHolder: 'https://github.com/you/repo.git or git@github.com:you/repo.git',
+      ignoreFocusOut: true,
+      validateInput: (value) =>
+        !value.trim() ? 'Enter the remote URL.' : /^-|\s/u.test(value.trim()) ? 'Not a valid URL.' : undefined,
+    });
+    if (!url) return false;
+    const name = await vscode.window.showInputBox({
+      title: 'Define Remote',
+      prompt: 'Remote name',
+      value: 'origin',
+      ignoreFocusOut: true,
+      validateInput: (value) => (/^[A-Za-z0-9][A-Za-z0-9._/-]*$/u.test(value.trim()) ? undefined : 'Not a valid remote name.'),
+    });
+    if (!name) return false;
+    await this.runner.run(['remote', 'add', name.trim(), url.trim()], {
+      cwd: fileURLToPath(repository.rootUri),
+      timeoutMs: 30_000,
+    });
+    return true;
+  }
+
   async openPush(repository: RepositorySummary, source = 'HEAD'): Promise<void> {
     const cwd = fileURLToPath(repository.rootUri);
     const [remotesResult, branchResult, upstream] = await Promise.all([
@@ -78,7 +110,7 @@ export class GitDialogs implements vscode.Disposable {
     ]);
     const remotes = remotesResult.stdout.toString('utf8').split(/\r?\n/u).filter(Boolean);
     if (!remotes.length) {
-      void vscode.window.showErrorMessage(`Repository “${repository.displayName}” has no remotes to push to.`);
+      if (await this.defineRemote(repository)) await this.openPush(repository, source);
       return;
     }
     const currentBranch = branchResult.stdout.toString('utf8').trim();

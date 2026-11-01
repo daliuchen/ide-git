@@ -12,6 +12,8 @@ All notable changes to Git Log are documented in this file.
 - Filter popups open under the button that was clicked instead of at the right edge.
 - Log toolbar: Pull and Push… buttons next to Fetch, all with editor icons. The ⋮ menu is gone (its items are on the toolbar, in the Commit window, in the Push dialog, or in the Command Palette), and the branch list and Changed Files panes can no longer be hidden; in a narrow panel they shrink instead.
 - Cherry-pick: when the commit's changes are already in the branch, the pick ends right away with a notice instead of stopping with nothing to commit. A rebase, cherry-pick or revert in progress shows Continue / Skip / Abort both in the Log and in the Commit window (a merge shows Abort).
+- Push with no remote offers Define Remote… (URL and name), then opens the Push dialog.
+- The Commit window's options and message-history popups no longer open on top of each other.
 - Comparing with the current branch (← / →, Compare with Current) leaves out commits whose changes the other side already has, so a cherry-picked commit no longer shows up as missing.
 - While another branch is shown, commits the current branch already has are dimmed, cherry-picked ones (same patch) are dimmed and tagged “picked”, and missing ones are bold.
 - Removed the Go to HEAD toolbar button; the current commit is at the top of the default (HEAD) view.
