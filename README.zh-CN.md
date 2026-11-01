@@ -5,7 +5,7 @@
 <p align="center">把 IntelliJ 那套 Git 工具搬进 Cursor / VS Code：真正的 Commit 窗口、能看清分支差别的 Log、可编辑的 Diff。</p>
 
 <p align="center">
-  <a href="https://open-vsx.org/extension/daliuchen/ide-git"><img src="https://img.shields.io/open-vsx/v/daliuchen/ide-git?label=Open%20VSX" alt="Open VSX"></a>
+  <a href="https://open-vsx.org/extension/EthanLiuChen/ide-git"><img src="https://img.shields.io/open-vsx/v/EthanLiuChen/ide-git?label=Open%20VSX" alt="Open VSX"></a>
   &nbsp;<a href="README.md">English</a> | 简体中文
 </p>
 

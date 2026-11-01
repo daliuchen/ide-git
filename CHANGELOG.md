@@ -4,7 +4,7 @@ All notable changes to Git Log are documented in this file.
 
 ## 0.3.0
 
-- Renamed to **IDE Git** (`daliuchen.ide-git`); commands are now under “IDE Git:”, and the editor and Explorer submenus are “IDE Git”. Uninstall `daliuchen.git-log-plus` when upgrading.
+- Renamed to **IDE Git** (`EthanLiuChen.ide-git`); commands are now under “IDE Git:”, and the editor and Explorer submenus are “IDE Git”. Uninstall `daliuchen.git-log-plus` when upgrading.
 - Removed to keep the Commit window simple: changelists (including chunk-level changelists and drag & drop), the checks before commit (reformat code, optimize imports, analyze code, check TODO, run tests), commit message checks and `commit.template` prefill, and the `Git Log: VCS Operations…` menu. The Commit window now shows one Changes group plus Merge Conflicts and Unversioned Files; the gear keeps Author and Run Git hooks.
 - Log filter bar: each filter shows its value (`Branch: feature/x`, `User: Alice`, `Date: since …`) with a × to clear it.
 - Branch filter: search box, grouped Local / Remote / Tags, click a name to show only that branch (checkboxes still combine several).

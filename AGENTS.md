@@ -4,7 +4,7 @@
 
 ## 项目速览
 
-- Cursor / VS Code 扩展，fork 自 [ascenx/vscode-git-log](https://github.com/ascenx/vscode-git-log)。扩展 ID `daliuchen.ide-git`。
+- Cursor / VS Code 扩展，fork 自 [ascenx/vscode-git-log](https://github.com/ascenx/vscode-git-log)。扩展 ID `EthanLiuChen.ide-git`（Open VSX 命名空间 `EthanLiuChen`）。
 - `src/`：扩展端（Node）。`src/git/` 封装 Git 命令，`src/commit/` 是 Commit 窗口，`src/dialogs/` 是 Push / Rebase 对话框，`src/protocol/` 是 webview 消息协议。
 - `webview/src/`：React 写的界面。`App.tsx` 是 Log，`commit/` 是 Commit 窗口，`dialog/` 是对话框。
 - `test/unit/`：vitest 单测；`test/integration/`：在 VS Code 1.85.2 里跑的集成测试。

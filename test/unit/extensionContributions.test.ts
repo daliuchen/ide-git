@@ -39,13 +39,13 @@ describe('extension contributions', () => {
     expect(missing).toEqual([]);
   });
 
-  it('uses daliuchen.ide-git as the extension identifier', async () => {
+  it('uses EthanLiuChen.ide-git as the extension identifier', async () => {
     const packageJson = JSON.parse(await readFile('package.json', 'utf8')) as {
       name?: string;
       publisher?: string;
     };
 
-    expect(`${packageJson.publisher}.${packageJson.name}`).toBe('daliuchen.ide-git');
+    expect(`${packageJson.publisher}.${packageJson.name}`).toBe('EthanLiuChen.ide-git');
   });
 
   it('declares VS Code 1.85 and Node 18 as the extension compatibility baseline', async () => {
