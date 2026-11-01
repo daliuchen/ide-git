@@ -80,6 +80,22 @@ describe('GitService', () => {
 
     const own = await service.getLog(repository, { limit: 10, skip: 0, refs });
     expect(own.every((commit) => commit.headStatus === undefined)).toBe(true);
+
+    // Comparing leaves out what was already picked: only the commit still to bring over remains.
+    const compared = await service.getLog(repository, {
+      limit: 10,
+      skip: 0,
+      refs,
+      filters: { ...EMPTY_LOG_FILTERS, compare: { ref: 'refs/heads/feature', direction: 'notInHead' } },
+    });
+    expect(compared.map((commit) => [commit.subject, commit.headStatus])).toEqual([['still missing', 'missing']]);
+    const reverse = await service.getLog(repository, {
+      limit: 10,
+      skip: 0,
+      refs,
+      filters: { ...EMPTY_LOG_FILTERS, compare: { ref: 'refs/heads/feature', direction: 'onlyInHead' } },
+    });
+    expect(reverse.map((commit) => commit.subject)).toEqual(['main only']);
   });
 
   describe('selection query cache', () => {

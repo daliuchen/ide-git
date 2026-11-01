@@ -68,7 +68,7 @@ describe('buildLogArguments', () => {
     expect(args).toContain('--author=A\\+B \\[bot\\] \\(release\\)');
   });
 
-  it('turns a compare filter into a HEAD range that replaces the branch list', async () => {
+  it('turns a compare filter into one side of HEAD...ref without cherry-picked commits', async () => {
     const { buildLogArguments } = await import('../../src/git/logQuery');
     const base = { text: '', branches: ['refs/heads/other'], authors: [], paths: [] };
     const notInHead = buildLogArguments({
@@ -77,13 +77,13 @@ describe('buildLogArguments', () => {
       format: 'F',
       filters: { ...base, compare: { ref: 'refs/heads/feature', direction: 'notInHead' } },
     });
-    expect(notInHead.slice(-2)).toEqual(['--end-of-options', 'HEAD..refs/heads/feature']);
+    expect(notInHead.slice(-4)).toEqual(['--cherry-pick', '--right-only', '--end-of-options', 'HEAD...refs/heads/feature']);
     const onlyInHead = buildLogArguments({
       limit: 10,
       skip: 0,
       format: 'F',
       filters: { ...base, compare: { ref: 'refs/remotes/origin/main', direction: 'onlyInHead' } },
     });
-    expect(onlyInHead.slice(-2)).toEqual(['--end-of-options', 'refs/remotes/origin/main..HEAD']);
+    expect(onlyInHead.slice(-4)).toEqual(['--cherry-pick', '--left-only', '--end-of-options', 'HEAD...refs/remotes/origin/main']);
   });
 });

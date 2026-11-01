@@ -19,10 +19,10 @@ function escapeExtendedRegexp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 }
 
-/** The revision range for a compare filter, e.g. `HEAD..refs/heads/feature`. */
-export function compareRange(compare: LogCompare): { include: string; exclude: string; range: string } {
+/** The side a compare filter lists (`include`) and the side it is compared against (`exclude`). */
+export function compareRange(compare: LogCompare): { include: string; exclude: string } {
   const [include, exclude] = compare.direction === 'notInHead' ? [compare.ref, 'HEAD'] : ['HEAD', compare.ref];
-  return { include, exclude, range: `${exclude}..${include}` };
+  return { include, exclude };
 }
 
 export function buildLogArguments(options: BuildLogArgumentsOptions): string[] {
@@ -66,7 +66,12 @@ export function buildLogArguments(options: BuildLogArgumentsOptions): string[] {
     args.push(`--until=@${String(Math.trunc(options.filters.dateTo))}`);
   }
 
-  if (options.filters.compare) args.push('--end-of-options', compareRange(options.filters.compare).range);
+  if (options.filters.compare) {
+    // `HEAD...ref` with one side kept, so commits whose change the other side already has
+    // (cherry-picked under another hash) drop out: the list is what is really left to bring over.
+    const side = options.filters.compare.direction === 'notInHead' ? '--right-only' : '--left-only';
+    args.push('--cherry-pick', side, '--end-of-options', `HEAD...${options.filters.compare.ref}`);
+  }
   else if (options.filters.branches.length) args.push('--end-of-options', ...options.filters.branches);
   else args.push('--end-of-options', 'HEAD');
 
