@@ -2,7 +2,7 @@
   "name": "ide-git",
   "displayName": "IDE Git — IntelliJ-style Commit, Log & Rebase",
   "description": "The IntelliJ-style Git tool for Cursor and VS Code: a commit window with chunk- and line-level commits, branch comparison and cherry-pick, interactive rebase, a push dialog, and editable diffs.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "EthanLiuChen",
   "license": "MIT",
   "packageManager": "pnpm@10.33.0",
