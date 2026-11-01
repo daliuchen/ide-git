@@ -3,8 +3,9 @@
   "displayName": "IDE Git — IntelliJ-style Commit, Log & Rebase",
   "description": "The IntelliJ-style Git tool for Cursor and VS Code: a commit window with chunk- and line-level commits, branch comparison and cherry-pick, interactive rebase, a push dialog, and editable diffs.",
   "version": "0.3.0",
-  "publisher": "daliuchen",
+  "publisher": "EthanLiuChen",
   "license": "MIT",
+  "packageManager": "pnpm@10.33.0",
   "icon": "media/git-log.png",
   "repository": {
     "type": "git",
@@ -370,11 +371,13 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:unit": "vitest run test/unit",
-    "test:integration": "npm run build && node ./scripts/run-integration.mjs",
+    "test:integration": "pnpm run build && node ./scripts/run-integration.mjs",
     "test:performance": "vitest run test/performance",
-    "package": "npm run clean && npm run build && vsce package --no-dependencies --baseContentUrl https://github.com/daliuchen/ide-git/blob/main --baseImagesUrl https://raw.githubusercontent.com/daliuchen/ide-git/main"
+    "package": "pnpm run clean && pnpm run build && vsce package --no-dependencies --baseContentUrl https://github.com/daliuchen/ide-git/blob/main --baseImagesUrl https://raw.githubusercontent.com/daliuchen/ide-git/main"
   },
   "dependencies": {
+    "@shikijs/langs": "3.23.0",
+    "@shikijs/themes": "3.23.0",
     "@vscode/codicons": "0.0.36",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

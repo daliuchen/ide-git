@@ -5,7 +5,7 @@
 <p align="center">The IntelliJ-style Git tool for Cursor and VS Code: a real Commit window, a Log that shows how branches differ, and diffs you can edit.</p>
 
 <p align="center">
-  <a href="https://open-vsx.org/extension/daliuchen/ide-git"><img src="https://img.shields.io/open-vsx/v/daliuchen/ide-git?label=Open%20VSX" alt="Open VSX"></a>
+  <a href="https://open-vsx.org/extension/EthanLiuChen/ide-git"><img src="https://img.shields.io/open-vsx/v/EthanLiuChen/ide-git?label=Open%20VSX" alt="Open VSX"></a>
   &nbsp;English | <a href="README.zh-CN.md">简体中文</a>
 </p>
 

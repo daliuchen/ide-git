@@ -4,7 +4,7 @@
 
 ## 项目速览
 
-- Cursor / VS Code 扩展，fork 自 [ascenx/vscode-git-log](https://github.com/ascenx/vscode-git-log)。扩展 ID `daliuchen.ide-git`。
+- Cursor / VS Code 扩展，fork 自 [ascenx/vscode-git-log](https://github.com/ascenx/vscode-git-log)。扩展 ID `EthanLiuChen.ide-git`（Open VSX 命名空间 `EthanLiuChen`）。
 - `src/`：扩展端（Node）。`src/git/` 封装 Git 命令，`src/commit/` 是 Commit 窗口，`src/dialogs/` 是 Push / Rebase 对话框，`src/protocol/` 是 webview 消息协议。
 - `webview/src/`：React 写的界面。`App.tsx` 是 Log，`commit/` 是 Commit 窗口，`dialog/` 是对话框。
 - `test/unit/`：vitest 单测；`test/integration/`：在 VS Code 1.85.2 里跑的集成测试。
@@ -57,6 +57,12 @@ cursor --install-extension ide-git-<版本>.vsix --force   # 装到本机 Cursor
 3. 改了界面或交互时，用 `pnpm run package` 打包装进 Cursor，亲手走一遍改动涉及的流程，并截图。
 4. 用户能感知到的变化：更新 `CHANGELOG.md` 顶部版本段落，并**同时**更新 `README.md`（英文）和 `README.zh-CN.md`（中文）。
 5. 有技术方案的需求，方案文档（`design/…`）要随 PR 一起提交，并补上「实际实现与偏差」一节。
+
+### 发版
+
+- 合并到 `main` 后，`.github/workflows/release.yml` 会检查 `package.json` 的版本号：没有对应的 `v<版本>` tag 时，自动测试、打包、打 tag、建 GitHub Release（说明取自 CHANGELOG 对应段落），并发布到 Open VSX；版本号没变就什么都不做。
+- 要发新版本：在 PR 里把 `package.json` 的 `version` 按语义化版本升一级（修复升 patch，新功能升 minor），并在 `CHANGELOG.md` 顶部写好这一版的 `## <版本>` 段落。缺这一段，发版会失败。
+- Open VSX 用受信任发布（OIDC），仓库里不存 token。
 
 ### PR 标题和描述
 
