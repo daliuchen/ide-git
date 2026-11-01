@@ -55,7 +55,7 @@ cursor --install-extension git-log-plus-<版本>.vsix --force   # 装到本机 C
 1. `pnpm run typecheck`、`pnpm run lint`、`pnpm run test:unit` 全绿。
 2. 改了 Git 行为、扩展激活、命令注册时，还要跑 `pnpm run test:integration`。
 3. 改了界面或交互时，用 `pnpm run package` 打包装进 Cursor，亲手走一遍改动涉及的流程，并截图。
-4. 用户能感知到的变化：更新 `CHANGELOG.md` 顶部版本段落，并**同时**更新 `README.md`（中文）和 `README.en.md`（英文）。
+4. 用户能感知到的变化：更新 `CHANGELOG.md` 顶部版本段落，并**同时**更新 `README.md`（英文）和 `README.zh-CN.md`（中文）。
 5. 有技术方案的需求，方案文档（`design/…`）要随 PR 一起提交，并补上「实际实现与偏差」一节。
 
 ### PR 标题和描述
