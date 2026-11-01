@@ -5,6 +5,12 @@ import { CommitGraphCell } from './CommitGraphCell';
 import { formatCommitDate } from './formatCommitDate';
 import { getVirtualRange } from './virtualRange';
 
+const HEAD_STATUS_TITLES = {
+  inHead: 'Already in the current branch',
+  picked: 'An equivalent change is already in the current branch (cherry-picked)',
+  missing: 'Not in the current branch yet',
+} as const;
+
 interface CommitListProps {
   commits: CommitSummary[];
   graphLayout: GraphLayoutResult;
@@ -197,7 +203,9 @@ export function CommitList({
             <div
               className={`commit-row${selectedHashes.has(commit.hash) ? ' selected' : ''}${
                 headHash === commit.hash ? ' head-row' : ''
-              }${commit.filterMatch === false ? ' filter-context' : ''}`}
+              }${commit.filterMatch === false ? ' filter-context' : ''}${
+                commit.headStatus ? ` head-${commit.headStatus}` : ''
+              }`}
               style={{ top: index * rowHeight }}
               role="row"
               aria-rowindex={index + 2}
@@ -251,7 +259,13 @@ export function CommitList({
                 {graphRow ? (
                   <CommitGraphCell row={graphRow} maxLaneCount={graphLayout.maxLaneCount} />
                 ) : null}
-                <span className="commit-subject">{commit.subject}</span>
+                <span
+                  className="commit-subject"
+                  {...(commit.headStatus ? { title: HEAD_STATUS_TITLES[commit.headStatus] } : {})}
+                >
+                  {commit.subject}
+                </span>
+                {commit.headStatus === 'picked' ? <span className="head-picked-badge">picked</span> : null}
                 {'oldPath' in commit &&
                 (commit as HistoryEntry).oldPath &&
                 (commit as HistoryEntry).oldPath !== (commit as HistoryEntry).path ? (

@@ -37,6 +37,11 @@ export interface CommitSummary {
   authorTime: number;
   commitTime: number;
   refs: RefLabel[];
+  /**
+   * Set while another branch is shown: whether the current branch already has this commit
+   * (`inHead`), has an equivalent change cherry-picked into it (`picked`), or lacks it (`missing`).
+   */
+  headStatus?: 'inHead' | 'picked' | 'missing';
 }
 
 export interface CommitDetails extends CommitSummary {

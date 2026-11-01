@@ -36,6 +36,11 @@ const FULL_FILE_DIFF_CONTEXT_LINES = 2_147_483_647;
 const WEBVIEW_FILE_PATCH_MAX_STDOUT_BYTES = 8 * 1024 * 1024;
 const WEBVIEW_FILE_PATCH_MAX_LINES = 50_000;
 
+/** Beyond this many commits on the other side, commits are not marked against HEAD. */
+const MAX_HEAD_COMPARISON = 20_000;
+/** Up to this many commits on both sides, cherry-picked commits are detected by patch id. */
+const MAX_CHERRY_COMPARISON = 3_000;
+
 export interface LogQuery {
   limit: number;
   skip: number;
@@ -563,6 +568,7 @@ export class GitService {
   private readonly textSearchCaches = new Map<string, TextSearchCacheEntry>();
   private readonly detailsCache = new Map<string, RepositoryCacheEntry<CommitDetails>>();
   private readonly filesCache = new Map<string, RepositoryCacheEntry<ChangedFile[]>>();
+  private readonly headMarks = new Map<string, ReadonlyMap<string, '+' | '='>>();
   private selectionCacheGeneration = 0;
 
   constructor(private readonly runner: GitRunner) {}
@@ -665,6 +671,71 @@ export class GitService {
   }
 
   async getLog(cwd: string, query: LogQuery): Promise<CommitSummary[]> {
+    const commits = await this.getLogPage(cwd, query);
+    const filters = query.filters ?? EMPTY_LOG_FILTERS;
+    const other =
+      filters.compare?.direction === 'notInHead'
+        ? filters.compare.ref
+        : !filters.compare && !filters.allBranches && filters.branches.length === 1
+          ? filters.branches[0]
+          : undefined;
+    const current = query.refs.find((ref) => ref.isCurrent);
+    if (!other || other === current?.fullName || !commits.length) return commits;
+    const missing = await this.commitsMissingFromHead(cwd, other, query.signal);
+    if (!missing) return commits;
+    return commits.map((commit) => {
+      const mark = missing.get(commit.hash);
+      return { ...commit, headStatus: mark === undefined ? 'inHead' : mark === '=' ? 'picked' : 'missing' };
+    });
+  }
+
+  /**
+   * Commits of `ref` that HEAD lacks, marked `=` when HEAD already has an equivalent patch (a
+   * cherry-pick) and `+` otherwise. Undefined when there is no HEAD or the branches are too far apart.
+   */
+  private async commitsMissingFromHead(
+    cwd: string,
+    ref: string,
+    signal?: AbortSignal,
+  ): Promise<ReadonlyMap<string, '+' | '='> | undefined> {
+    const options = { cwd, ...(signal ? { signal } : {}), timeoutMs: 30_000 };
+    try {
+      const resolved = await this.runner.run(
+        // `ref` is a known full ref name, so it cannot be read as an option.
+        ['rev-parse', 'HEAD^{commit}', `${ref}^{commit}`],
+        options,
+      );
+      const key = `${cwd}\0${resolved.stdout.toString('utf8').trim().replace(/\s+/gu, ' ')}`;
+      const cached = this.headMarks.get(key);
+      if (cached) return cached;
+      const counts = await this.runner.run(
+        ['rev-list', '--count', '--left-right', '--end-of-options', `HEAD...${ref}`],
+        options,
+      );
+      const [behind = 0, ahead = 0] = counts.stdout.toString('utf8').trim().split(/\s+/u).map(Number);
+      if (ahead > MAX_HEAD_COMPARISON) return undefined;
+      // Patch ids are only worth computing while the two sides stay small.
+      const result = await this.runner.run(
+        behind + ahead <= MAX_CHERRY_COMPARISON
+          ? ['rev-list', '--cherry-mark', '--right-only', '--end-of-options', `HEAD...${ref}`]
+          : ['rev-list', '--end-of-options', ref, '^HEAD'],
+        options,
+      );
+      const marks = new Map<string, '+' | '='>();
+      for (const line of result.stdout.toString('utf8').split('\n')) {
+        const match = /^([+=]?)([0-9a-f]{40,64})$/u.exec(line.trim());
+        if (match?.[2]) marks.set(match[2], match[1] === '=' ? '=' : '+');
+      }
+      if (this.headMarks.size >= 20) this.headMarks.clear();
+      this.headMarks.set(key, marks);
+      return marks;
+    } catch (error) {
+      if (error instanceof GitCommandError && !error.cancelled) return undefined;
+      throw error;
+    }
+  }
+
+  private async getLogPage(cwd: string, query: LogQuery): Promise<CommitSummary[]> {
     validatePage(query);
     const requestedFilters = query.filters ?? EMPTY_LOG_FILTERS;
     const filters = requestedFilters.compare

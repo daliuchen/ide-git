@@ -961,6 +961,31 @@ select:focus-visible,
   opacity: 0.65;
 }
 
+/* Another branch is shown: dim what the current branch already has, so what is left stands out. */
+.commit-row.head-inHead:not(.selected) .commit-subject,
+.commit-row.head-inHead:not(.selected) .commit-author,
+.commit-row.head-inHead:not(.selected) .commit-date,
+.commit-row.head-picked:not(.selected) .commit-subject,
+.commit-row.head-picked:not(.selected) .commit-author,
+.commit-row.head-picked:not(.selected) .commit-date {
+  opacity: 0.5;
+}
+
+.commit-row.head-missing .commit-subject {
+  font-weight: 600;
+}
+
+.head-picked-badge {
+  flex: none;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--vscode-gitDecoration-addedResourceForeground, #73c991);
+  border-radius: 8px;
+  color: var(--vscode-gitDecoration-addedResourceForeground, #73c991);
+  font-size: 10px;
+  line-height: 14px;
+}
+
 .commit-row > span {
   min-width: 0;
   height: 100%;

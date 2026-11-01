@@ -46,6 +46,42 @@ async function createHistoryFixture(): Promise<string> {
 }
 
 describe('GitService', () => {
+  it('marks which commits of another branch the current branch has, picked, or lacks', async () => {
+    const repository = await createHistoryFixture();
+    await git(repository, 'switch', '-q', '-c', 'feature');
+    await writeFile(join(repository, 'picked.txt'), 'picked\n');
+    await git(repository, 'add', 'picked.txt');
+    await git(repository, 'commit', '-q', '-m', 'to be picked');
+    const picked = await git(repository, 'rev-parse', 'HEAD');
+    await writeFile(join(repository, 'missing.txt'), 'missing\n');
+    await git(repository, 'add', 'missing.txt');
+    await git(repository, 'commit', '-q', '-m', 'still missing');
+    await git(repository, 'switch', '-q', 'main');
+    // Diverge first, so the cherry-pick is a new commit rather than the same object.
+    await writeFile(join(repository, 'main.txt'), 'main\n');
+    await git(repository, 'add', 'main.txt');
+    await git(repository, 'commit', '-q', '-m', 'main only');
+    await git(repository, 'cherry-pick', picked);
+
+    const service = new GitService(new GitRunner());
+    const refs = await service.getRefs(repository, 'main');
+    const commits = await service.getLog(repository, {
+      limit: 10,
+      skip: 0,
+      refs,
+      filters: { ...EMPTY_LOG_FILTERS, branches: ['refs/heads/feature'] },
+    });
+    expect(commits.map((commit) => [commit.subject, commit.headStatus])).toEqual([
+      ['still missing', 'missing'],
+      ['to be picked', 'picked'],
+      ['修复登录 🚀', 'inHead'],
+      ['初始提交', 'inHead'],
+    ]);
+
+    const own = await service.getLog(repository, { limit: 10, skip: 0, refs });
+    expect(own.every((commit) => commit.headStatus === undefined)).toBe(true);
+  });
+
   describe('selection query cache', () => {
     const hash = 'a'.repeat(40);
     const parent = 'b'.repeat(40);
