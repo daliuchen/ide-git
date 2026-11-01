@@ -39,13 +39,13 @@ describe('extension contributions', () => {
     expect(missing).toEqual([]);
   });
 
-  it('uses daliuchen.git-log-plus as the extension identifier', async () => {
+  it('uses daliuchen.ide-git as the extension identifier', async () => {
     const packageJson = JSON.parse(await readFile('package.json', 'utf8')) as {
       name?: string;
       publisher?: string;
     };
 
-    expect(`${packageJson.publisher}.${packageJson.name}`).toBe('daliuchen.git-log-plus');
+    expect(`${packageJson.publisher}.${packageJson.name}`).toBe('daliuchen.ide-git');
   });
 
   it('declares VS Code 1.85 and Node 18 as the extension compatibility baseline', async () => {
@@ -95,9 +95,9 @@ describe('extension contributions', () => {
       displayName?: string;
       description?: string;
     };
-    expect(packageJson.displayName).toBe('Git Log Plus — Commit, Log & History');
+    expect(packageJson.displayName).toBe('IDE Git — IntelliJ-style Commit, Log & Rebase');
     expect(packageJson.description).toBe(
-      'A full IDE-style Git workflow for VS Code and Cursor: commit tool window with partial commits, commit graph log, interactive rebase, push dialog, annotate, and editable diffs.',
+      'The IntelliJ-style Git tool for Cursor and VS Code: a commit window with chunk- and line-level commits, branch comparison and cherry-pick, interactive rebase, a push dialog, and editable diffs.',
     );
 
     const files = [
@@ -150,11 +150,11 @@ describe('extension contributions', () => {
     expect(packageJson.activationEvents).not.toContain('onView:gitLogWorkbench.launcher');
     expect(packageJson.contributes?.submenus).toContainEqual({
       id: 'gitLogWorkbench.editorContext',
-      label: 'Git Log',
+      label: 'IDE Git',
     });
     expect(packageJson.contributes?.submenus).toContainEqual({
       id: 'gitLogWorkbench.explorerContext',
-      label: 'Git Log',
+      label: 'IDE Git',
     });
     expect(packageJson.contributes?.menus?.['editor/context']).toContainEqual(
       expect.objectContaining({

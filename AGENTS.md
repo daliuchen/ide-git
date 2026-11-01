@@ -1,10 +1,10 @@
-# Git Log Plus 开发规范
+# IDE Git 开发规范
 
 给在这个仓库里工作的人和 AI agent（Claude Code、Cursor、Codex 等）看。`CLAUDE.md` 只是引用本文件，规则以这里为准。
 
 ## 项目速览
 
-- Cursor / VS Code 扩展，fork 自 [ascenx/vscode-git-log](https://github.com/ascenx/vscode-git-log)。扩展 ID `daliuchen.git-log-plus`。
+- Cursor / VS Code 扩展，fork 自 [ascenx/vscode-git-log](https://github.com/ascenx/vscode-git-log)。扩展 ID `daliuchen.ide-git`。
 - `src/`：扩展端（Node）。`src/git/` 封装 Git 命令，`src/commit/` 是 Commit 窗口，`src/dialogs/` 是 Push / Rebase 对话框，`src/protocol/` 是 webview 消息协议。
 - `webview/src/`：React 写的界面。`App.tsx` 是 Log，`commit/` 是 Commit 窗口，`dialog/` 是对话框。
 - `test/unit/`：vitest 单测；`test/integration/`：在 VS Code 1.85.2 里跑的集成测试。
@@ -23,7 +23,7 @@ pnpm run lint               # eslint
 pnpm run test:unit          # vitest
 pnpm run test:integration   # VS Code 1.85.2 集成测试
 pnpm run package            # 打出 .vsix
-cursor --install-extension git-log-plus-<版本>.vsix --force   # 装到本机 Cursor 试用
+cursor --install-extension ide-git-<版本>.vsix --force   # 装到本机 Cursor 试用
 ```
 
 ---

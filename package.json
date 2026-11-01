@@ -1,18 +1,18 @@
 {
-  "name": "git-log-plus",
-  "displayName": "Git Log Plus — Commit, Log & History",
-  "description": "A full IDE-style Git workflow for VS Code and Cursor: commit tool window with partial commits, commit graph log, interactive rebase, push dialog, annotate, and editable diffs.",
+  "name": "ide-git",
+  "displayName": "IDE Git — IntelliJ-style Commit, Log & Rebase",
+  "description": "The IntelliJ-style Git tool for Cursor and VS Code: a commit window with chunk- and line-level commits, branch comparison and cherry-pick, interactive rebase, a push dialog, and editable diffs.",
   "version": "0.3.0",
   "publisher": "daliuchen",
   "license": "MIT",
   "icon": "media/git-log.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/daliuchen/git-log-plus.git"
+    "url": "https://github.com/daliuchen/ide-git.git"
   },
-  "homepage": "https://github.com/daliuchen/git-log-plus#readme",
+  "homepage": "https://github.com/daliuchen/ide-git#readme",
   "bugs": {
-    "url": "https://github.com/daliuchen/git-log-plus/issues"
+    "url": "https://github.com/daliuchen/ide-git/issues"
   },
   "private": true,
   "engines": {
@@ -25,6 +25,8 @@
   "keywords": [
     "git",
     "git log",
+    "intellij",
+    "ide",
     "commit graph",
     "history",
     "commit",
@@ -57,94 +59,94 @@
       {
         "command": "gitLogWorkbench.openLog",
         "title": "Open Log",
-        "category": "Git Log",
+        "category": "IDE Git",
         "icon": "$(git-branch)"
       },
       {
         "command": "gitLogWorkbench.commit.open",
         "title": "Commit…",
-        "category": "Git Log",
+        "category": "IDE Git",
         "icon": "$(check)"
       },
       {
         "command": "gitLogWorkbench.editor.showLineHistory",
         "title": "Show History for Current Line",
-        "category": "Git Log"
+        "category": "IDE Git"
       },
       {
         "command": "gitLogWorkbench.editor.showSelectionHistory",
         "title": "Show History for Selection",
-        "category": "Git Log"
+        "category": "IDE Git"
       },
       {
         "command": "gitLogWorkbench.editor.showFileHistory",
         "title": "Show File History",
-        "category": "Git Log"
+        "category": "IDE Git"
       },
       {
         "command": "gitLogWorkbench.explorer.showFolderHistory",
         "title": "Show Folder History",
-        "category": "Git Log"
+        "category": "IDE Git"
       },
       {
         "command": "gitLogWorkbench.editor.compareFileWithRef",
         "title": "Compare File with Branch or Tag…",
-        "category": "Git Log"
+        "category": "IDE Git"
       },
       {
         "command": "gitLogWorkbench.diff.jumpToSource",
         "title": "Jump to Source",
-        "category": "Git Log",
+        "category": "IDE Git",
         "icon": "$(go-to-file)"
       },
       {
         "command": "gitLogWorkbench.push",
         "title": "Push…",
-        "category": "Git Log",
+        "category": "IDE Git",
         "icon": "$(repo-push)"
       },
       {
         "command": "gitLogWorkbench.updateProject",
         "title": "Update Project…",
-        "category": "Git Log",
+        "category": "IDE Git",
         "icon": "$(repo-pull)"
       },
       {
         "command": "gitLogWorkbench.editor.toggleAnnotate",
         "title": "Annotate with Git Blame",
-        "category": "Git Log",
+        "category": "IDE Git",
         "icon": "$(person)"
       },
       {
         "command": "gitLogWorkbench.branches",
         "title": "Branches…",
-        "category": "Git Log",
+        "category": "IDE Git",
         "icon": "$(git-branch)"
       },
       {
         "command": "gitLogWorkbench.compareWithLocal",
         "title": "Compare Revision with Local",
-        "category": "Git Log"
+        "category": "IDE Git"
       },
       {
         "command": "gitLogWorkbench.editor.commitChange",
         "title": "Commit This Change…",
-        "category": "Git Log"
+        "category": "IDE Git"
       },
       {
         "command": "gitLogWorkbench.editor.amendChange",
         "title": "Amend This Change into Last Commit",
-        "category": "Git Log"
+        "category": "IDE Git"
       }
     ],
     "submenus": [
       {
         "id": "gitLogWorkbench.editorContext",
-        "label": "Git Log"
+        "label": "IDE Git"
       },
       {
         "id": "gitLogWorkbench.explorerContext",
-        "label": "Git Log"
+        "label": "IDE Git"
       }
     ],
     "menus": {
@@ -370,7 +372,7 @@
     "test:unit": "vitest run test/unit",
     "test:integration": "npm run build && node ./scripts/run-integration.mjs",
     "test:performance": "vitest run test/performance",
-    "package": "npm run clean && npm run build && vsce package --no-dependencies --baseContentUrl https://github.com/daliuchen/git-log-plus/blob/main --baseImagesUrl https://raw.githubusercontent.com/daliuchen/git-log-plus/main"
+    "package": "npm run clean && npm run build && vsce package --no-dependencies --baseContentUrl https://github.com/daliuchen/ide-git/blob/main --baseImagesUrl https://raw.githubusercontent.com/daliuchen/ide-git/main"
   },
   "dependencies": {
     "@vscode/codicons": "0.0.36",

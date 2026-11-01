@@ -27,7 +27,7 @@ async function waitForTab(
 }
 
 export async function run(): Promise<void> {
-  const extension = vscode.extensions.getExtension('daliuchen.git-log-plus');
+  const extension = vscode.extensions.getExtension('daliuchen.ide-git');
   assert.ok(extension, 'the Git Log extension should be installed in the test host');
 
   await extension.activate();

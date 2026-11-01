@@ -1,11 +1,11 @@
-<p align="center"><img src="images/icon-256.png" width="128" alt="Git Log Plus"></p>
+<p align="center"><img src="images/icon-256.png" width="128" alt="IDE Git"></p>
 
-<h1 align="center">Git Log Plus</h1>
+<h1 align="center">IDE Git</h1>
 
-<p align="center">IDE-grade Git for Cursor and VS Code: a real Commit window, a Log that shows how branches differ, and diffs you can edit.</p>
+<p align="center">The IntelliJ-style Git tool for Cursor and VS Code: a real Commit window, a Log that shows how branches differ, and diffs you can edit.</p>
 
 <p align="center">
-  <a href="https://open-vsx.org/extension/daliuchen/git-log-plus"><img src="https://img.shields.io/open-vsx/v/daliuchen/git-log-plus?label=Open%20VSX" alt="Open VSX"></a>
+  <a href="https://open-vsx.org/extension/daliuchen/ide-git"><img src="https://img.shields.io/open-vsx/v/daliuchen/ide-git?label=Open%20VSX" alt="Open VSX"></a>
   &nbsp;English | <a href="README.zh-CN.md">简体中文</a>
 </p>
 
@@ -22,13 +22,13 @@ Built on [ascenx/vscode-git-log](https://github.com/ascenx/vscode-git-log) (MIT)
 
 ## Installation
 
-Search for **Git Log Plus** in the Extensions view of Cursor, or download the `.vsix` from [Releases](https://github.com/daliuchen/git-log-plus/releases) and run *Extensions: Install from VSIX…*.
+Search for **IDE Git** in the Extensions view of Cursor, or download the `.vsix` from [Releases](https://github.com/daliuchen/ide-git/releases) and run *Extensions: Install from VSIX…*.
 
 Uninstall the original **Git Log** (`ascenx.git-log`) first if you have it.
 
 ## Getting started
 
-1. **Open the Commit window**: run `Git Log: Commit…`, or in Cursor open the **⌄** at the end of the side bar's icon row and pick **Commit**.
+1. **Open the Commit window**: run `IDE Git: Commit…`, or in Cursor open the **⌄** at the end of the side bar's icon row and pick **Commit**.
 2. **Commit**: check files, double-click to review the diff, write a message and press `⌘Enter`; `⌘⌥Enter` commits and pushes.
 3. **Commit part of a file**: expand it to check chunks, expand a chunk to check lines.
 4. **Browse history**: the **Git Log** tab in the bottom panel. Click a branch on the left: **bold** commits are missing from the current branch, dimmed ones are already there, and **picked** ones were cherry-picked.
@@ -46,7 +46,7 @@ Uninstall the original **Git Log** (`ascenx.git-log`) first if you have it.
 | Resolve conflicts | Handle them in the Commit window, then **Continue** (or **Skip** / **Abort**) in the banner |
 | Push or pull | **Push…** / **Pull** on the Log toolbar |
 | Put work aside | Right-click files → **Shelve Changes…** |
-| See who changed each line | Editor right-click → *Git Log → Annotate with Git Blame* |
+| See who changed each line | Editor right-click → *IDE Git → Annotate with Git Blame* |
 
 ## Screenshots
 
