@@ -167,3 +167,22 @@ describe('selection model', () => {
     expect(commitSelection(file, reloaded, nextContext)).toEqual({ hunks: [b.id] });
   });
 });
+
+describe('findChangeTrail', () => {
+  it('returns the group, directories and file node of a change', async () => {
+    const { findChangeTrail } = await import('../../webview/src/commit/buildChangeTree');
+    const tree = buildChangeTree({
+      changes: [change('src/commit/a.ts'), change('src/b.ts'), change('README.md')],
+      repositories,
+      groupByDirectory: true,
+      showUnversioned: true,
+    });
+    expect(findChangeTrail(tree, { repositoryId: 'r', path: 'src/commit/a.ts' })?.map((node) => node.label)).toEqual([
+      'Changes',
+      'src',
+      'commit',
+      'a.ts',
+    ]);
+    expect(findChangeTrail(tree, { repositoryId: 'r', path: 'missing.ts' })).toBeUndefined();
+  });
+});

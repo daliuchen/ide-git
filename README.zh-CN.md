@@ -46,7 +46,7 @@
 | 解决冲突 | Commit 窗口里处理冲突文件，然后点提示条上的 **Continue**（或 **Skip** / **Abort**） |
 | 推送、拉取 | Log 工具栏的 **Push…** / **Pull** |
 | 先把改动收起来 | 文件右键 → **Shelve Changes…** |
-| 逐个文件看一个提交的改动 | 在 **Changed Files** 里双击文件，然后按 **F7** / **Shift+F7**：到最后一处改动后再按一次就打开下一个文件（Commit 窗口里同样可用） |
+| 逐个文件看一个提交的改动 | 在 **Changed Files** 里双击文件，然后按 **F7** / **Shift+F7**：到最后一处改动后再按一次就打开下一个文件（Commit 窗口里同样可用）；列表会跟着选中当前显示的文件 |
 | 看每行是谁改的 | 编辑器右键 → *IDE Git → Annotate with Git Blame*；鼠标悬停某行 → **Show in Git Log** 跳到对应提交 |
 
 ## 截图

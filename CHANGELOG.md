@@ -2,6 +2,10 @@
 
 All notable changes to IDE Git are documented in this file.
 
+## 0.5.1
+
+- The Commit window also selects and marks the file shown in the active editor, so its selection follows along while you step through files with F7 (it stayed on the file you first opened).
+
 ## 0.5.0
 
 - F7 / Shift+F7 in a diff opened from the Git Log or the Commit window steps through the changes and then continues into the next (or previous) file of the list: at the last change the status bar says which file comes next, and pressing again opens it at its first change.

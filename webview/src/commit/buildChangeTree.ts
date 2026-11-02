@@ -225,3 +225,22 @@ export function orderedFileChanges(nodes: readonly ChangeTreeNode[]): CommitView
     node.kind === 'file' && node.change ? [node.change] : orderedFileChanges(node.children),
   );
 }
+
+/** The nodes from the top of the tree down to the file node of `target`, or undefined. */
+export function findChangeTrail(
+  nodes: readonly ChangeTreeNode[],
+  target: Pick<CommitViewChange, 'repositoryId' | 'path'>,
+): ChangeTreeNode[] | undefined {
+  for (const node of nodes) {
+    if (node.kind === 'file') {
+      if (node.change?.repositoryId === target.repositoryId && node.change.path === target.path) return [node];
+      continue;
+    }
+    if (!node.changes.some((change) => change.repositoryId === target.repositoryId && change.path === target.path)) {
+      continue;
+    }
+    const trail = findChangeTrail(node.children, target);
+    if (trail) return [node, ...trail];
+  }
+  return undefined;
+}
