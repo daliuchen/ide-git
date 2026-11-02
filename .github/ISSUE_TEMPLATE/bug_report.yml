@@ -1,0 +1,74 @@
+name: Bug report
+description: Something in IDE Git does not work as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! English or 中文 are both fine.
+        Before filing, please try *Developer: Reload Window* once and check whether the problem is still there.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you saw instead. Screenshots help a lot.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the Commit window
+        2. Expand a file and check one line
+        3. Press ⌘Enter
+        4. …
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - Commit window
+        - Git Log
+        - Diff
+        - Push / Rebase dialog
+        - Annotate
+        - Cherry-pick / Rebase / Merge in progress
+        - Installation / update
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: extension-version
+    attributes:
+      label: IDE Git version
+      description: Extensions view → IDE Git, or `cursor --list-extensions --show-versions`
+      placeholder: 0.4.1
+    validations:
+      required: true
+  - type: input
+    id: editor
+    attributes:
+      label: Editor and version
+      description: Cursor or VS Code, from *Help → About*
+      placeholder: Cursor 1.x / VS Code 1.10x
+    validations:
+      required: true
+  - type: input
+    id: git
+    attributes:
+      label: Git version and OS
+      description: Output of `git --version`, and your OS
+      placeholder: git version 2.47.0, macOS 15
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Optional. *Output* panel → choose **Git Log** in the dropdown, copy the lines around the problem.
+        Remove anything private (repository URLs with tokens, file contents) before pasting.
+      render: text
