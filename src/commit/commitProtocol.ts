@@ -124,6 +124,8 @@ export type CommitExtensionMessage =
       recentAuthors: string[];
     }
   | { type: 'amendMessage'; message: string }
+  /** The file shown in the active editor tab; the list selects it. */
+  | { type: 'activeEditorFile'; repositoryId?: string; path?: string }
   | { type: 'committed'; summary: string; keepMessage: boolean }
   | { type: 'busy'; label?: string }
   | { type: 'error'; message: string }

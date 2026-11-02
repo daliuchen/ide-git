@@ -26,6 +26,7 @@ import {
   buildChangeTree,
   changeId,
   collectNodeIds,
+  findChangeTrail,
   flattenVisible,
   orderedFileChanges,
   type ChangeTreeNode,
@@ -187,6 +188,9 @@ export function CommitApp() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [focusedId, setFocusedId] = useState<string>();
   const [anchorId, setAnchorId] = useState<string>();
+  const [activeFile, setActiveFile] = useState<{ repositoryId: string; path: string }>();
+  /** The active file last selected, so a refresh does not undo the user's own selection. */
+  const [followedActiveFile, setFollowedActiveFile] = useState<string>();
   const [message, setMessage] = useState('');
   const [amend, setAmend] = useState(persisted.amend ?? false);
   const [signOff, setSignOff] = useState(persisted.signOff ?? false);
@@ -269,6 +273,13 @@ export function CommitApp() {
           }
           break;
         }
+        case 'activeEditorFile':
+          setActiveFile(
+            incoming.repositoryId && incoming.path
+              ? { repositoryId: incoming.repositoryId, path: incoming.path }
+              : undefined,
+          );
+          break;
         case 'amendMessage':
           setAmendMessage(incoming.message);
           if (amendRef.current) setMessage((current) => (current.trim() ? current : incoming.message));
@@ -353,6 +364,27 @@ export function CommitApp() {
     [data, layout.groupByDirectory, layout.showUnversioned],
   );
   const rows = useMemo(() => flattenVisible(tree, collapsed), [tree, collapsed]);
+  // Selection follows the editor, so stepping through files with F7 moves it along. Adjusted
+  // during render (not in an effect) and only once per file, so later refreshes keep the user's own
+  // selection; waits for the file to appear when the message arrives before the first state.
+  const activeFileKey = activeFile ? changeId(activeFile) : undefined;
+  if (activeFileKey !== followedActiveFile) {
+    const trail = activeFile ? findChangeTrail(tree, activeFile) : undefined;
+    const node = trail?.at(-1);
+    if (!activeFile) {
+      setFollowedActiveFile(undefined);
+    } else if (trail && node) {
+      setFollowedActiveFile(activeFileKey);
+      if (trail.some((ancestor) => collapsed.has(ancestor.id))) {
+        const next = new Set(collapsed);
+        for (const ancestor of trail) next.delete(ancestor.id);
+        setCollapsed(next);
+      }
+      setSelected(new Set([node.id]));
+      setAnchorId(node.id);
+      setFocusedId(node.id);
+    }
+  }
   // Read by runAction, which stays stable across renders.
   const diffOrder = useRef<ChangeRef[]>([]);
   useEffect(() => {
@@ -677,6 +709,11 @@ export function CommitApp() {
     const state = nodeState(node.changes, selection, context);
     const isConflictOnly = node.changes.length > 0 && node.changes.every((candidate) => candidate.status === 'U');
     const expandable = node.children.length > 0 || node.kind === 'group';
+    const isActiveEditorFile =
+      change !== undefined &&
+      activeFile !== undefined &&
+      change.repositoryId === activeFile.repositoryId &&
+      change.path === activeFile.path;
     const chunkable = Boolean(change && (change.status === 'M' || change.status === 'T') && !change.binary);
     const chunksOpen = Boolean(change && openHunks.has(changeId(change)));
     return (
@@ -687,7 +724,8 @@ export function CommitApp() {
           aria-level={node.depth + 1}
           aria-selected={selected.has(node.id)}
           aria-expanded={expandable ? !collapsed.has(node.id) : undefined}
-          className={`tree-row kind-${node.kind}${selected.has(node.id) ? ' selected' : ''}${focusedId === node.id ? ' focused' : ''}`}
+          className={`tree-row kind-${node.kind}${selected.has(node.id) ? ' selected' : ''}${focusedId === node.id ? ' focused' : ''}${isActiveEditorFile ? ' active-editor' : ''}`}
+          {...(isActiveEditorFile ? { 'aria-current': 'true' as const } : {})}
           style={{ paddingLeft: 4 + node.depth * 14 }}
           title={
             change

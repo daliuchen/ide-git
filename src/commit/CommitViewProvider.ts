@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import * as vscode from 'vscode';
 import type { DiffManager } from '../diff/DiffManager';
 import type { NavigableDiff } from '../diff/DiffNavigator';
+import type { ActiveEditorFile } from '../editor/activeEditorFile';
 import { classifyGitError } from '../git/classifyGitError';
 import { GitCommandError, type GitRunner } from '../git/GitRunner';
 import { discoverRepositories, inspectRepository } from '../repositories/discoverRepositories';
@@ -53,6 +54,8 @@ export interface CommitViewHooks {
   /** Pushes after "Commit and Push"; resolves when the push dialog or push has finished. */
   push(repository: RepositorySummary): Promise<void>;
   onDidCommit?(repository: RepositorySummary): void;
+  /** Called after repositories are (re)discovered, so the active editor file can be resolved. */
+  onDidRefresh?(): void;
   /** Opens one diff of an ordered list, so F7 can continue into the next file. */
   openDiffSequence?(
     items: readonly NavigableDiff[],
@@ -63,6 +66,7 @@ export interface CommitViewHooks {
 
 export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   private view: vscode.WebviewView | undefined;
+  private activeEditorFile: ActiveEditorFile | undefined;
   private viewDisposables: vscode.Disposable[] = [];
   private readonly disposables: vscode.Disposable[] = [];
   private repositories: RepositorySummary[] = [];
@@ -219,6 +223,7 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
         );
         this.snapshots = snapshots;
         await this.postState();
+        this.hooks.onDidRefresh?.();
       } while (this.refreshQueued);
     })().finally(() => {
       this.refreshing = undefined;
@@ -264,6 +269,7 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
   private async handle(message: CommitWebviewMessage): Promise<void> {
     switch (message.type) {
       case 'ready':
+        await this.postActiveEditorFile();
         this.stale = true;
         if (this.snapshots.size) await this.postState();
         await this.refresh();
@@ -769,6 +775,23 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
     this.output.appendLine(`[commit] ${message}`);
     await this.post({ type: 'error', message });
     void this.refresh().catch(() => undefined);
+  }
+
+  /** Selects `file` in the list when it changes; called whenever the active editor tab changes. */
+  setActiveEditorFile(file: ActiveEditorFile | undefined): void {
+    if (file?.repositoryId === this.activeEditorFile?.repositoryId && file?.path === this.activeEditorFile?.path) {
+      return;
+    }
+    this.activeEditorFile = file;
+    void this.postActiveEditorFile();
+  }
+
+  private postActiveEditorFile(): Promise<void> {
+    const file = this.activeEditorFile;
+    return this.post({
+      type: 'activeEditorFile',
+      ...(file ? { repositoryId: file.repositoryId, path: file.path } : {}),
+    });
   }
 
   private async post(message: CommitExtensionMessage): Promise<void> {

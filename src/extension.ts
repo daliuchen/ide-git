@@ -415,6 +415,7 @@ export function activate(context: vscode.ExtensionContext): void {
         await vscode.commands.executeCommand('gitLogWorkbench.push', repository.rootUri);
       },
       openDiffSequence: (items, index, openFirst) => diffNavigator.open(items, index, openFirst),
+      onDidRefresh: () => updateActiveEditorFile(),
     },
   );
   commitPanel.focus = (message) => commitViewProvider.focus(message);
@@ -627,10 +628,13 @@ export function activate(context: vscode.ExtensionContext): void {
           : undefined;
     if (!resource) {
       workbenchProvider.setActiveEditorFile(undefined);
+      commitViewProvider.setActiveEditorFile(undefined);
       return;
     }
     void resolveActiveEditorFile(resource, repositories.entries()).then((file) => {
-      if (generation === activeEditorFileGeneration) workbenchProvider.setActiveEditorFile(file);
+      if (generation !== activeEditorFileGeneration) return;
+      workbenchProvider.setActiveEditorFile(file);
+      commitViewProvider.setActiveEditorFile(file);
     });
   };
   workbenchProvider.onDidChangeRepositories = updateActiveEditorFile;

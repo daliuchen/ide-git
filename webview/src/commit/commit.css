@@ -199,6 +199,15 @@ textarea:focus-visible,
   color: var(--vscode-list-activeSelectionForeground);
 }
 
+/* The file open in the active editor tab: an inset bar keeps the row width unchanged. */
+.tree-row.active-editor {
+  box-shadow: inset 2px 0 0 var(--vscode-focusBorder);
+}
+
+.tree-row.active-editor .label {
+  font-weight: 600;
+}
+
 .change-tree:focus .tree-row.focused {
   outline: 1px solid var(--vscode-list-focusOutline);
   outline-offset: -1px;
