@@ -218,3 +218,10 @@ export function collectNodeIds(nodes: readonly ChangeTreeNode[]): string[] {
   visit(nodes);
   return ids;
 }
+
+/** Every file of the tree in display order, including those inside collapsed nodes. */
+export function orderedFileChanges(nodes: readonly ChangeTreeNode[]): CommitViewChange[] {
+  return nodes.flatMap((node) =>
+    node.kind === 'file' && node.change ? [node.change] : orderedFileChanges(node.children),
+  );
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CommitViewChange, CommitViewRepository } from '../../src/commit/commitProtocol';
-import { buildChangeTree, flattenVisible } from '../../webview/src/commit/buildChangeTree';
+import { buildChangeTree, flattenVisible, orderedFileChanges } from '../../webview/src/commit/buildChangeTree';
 import type { CommitViewHunk } from '../../src/commit/commitProtocol';
 import {
   EMPTY_SELECTION,
@@ -48,6 +48,22 @@ describe('buildChangeTree', () => {
     ]);
     expect(changes?.children[1]?.children.map((node) => node.label)).toEqual(['commit', 'webview']);
     expect(changes?.children[1]?.changes).toHaveLength(3);
+  });
+
+  it('lists every file in display order, including collapsed ones', () => {
+    const tree = buildChangeTree({
+      changes: [change('src/b.ts'), change('README.md'), change('src/a.ts'), change('new.txt', '?'), change('c.ts', 'U')],
+      repositories,
+      groupByDirectory: true,
+      showUnversioned: true,
+    });
+    expect(orderedFileChanges(tree).map((item) => item.path)).toEqual([
+      'c.ts',
+      'src/a.ts',
+      'src/b.ts',
+      'README.md',
+      'new.txt',
+    ]);
   });
 
   it('lists files flat with their directory as detail', () => {

@@ -27,6 +27,7 @@ import {
   changeId,
   collectNodeIds,
   flattenVisible,
+  orderedFileChanges,
   type ChangeTreeNode,
 } from './buildChangeTree';
 import {
@@ -352,6 +353,11 @@ export function CommitApp() {
     [data, layout.groupByDirectory, layout.showUnversioned],
   );
   const rows = useMemo(() => flattenVisible(tree, collapsed), [tree, collapsed]);
+  // Read by runAction, which stays stable across renders.
+  const diffOrder = useRef<ChangeRef[]>([]);
+  useEffect(() => {
+    diffOrder.current = refs(orderedFileChanges(tree).filter((change) => change.status !== 'U'));
+  }, [tree]);
   const rowIndex = useMemo(() => new Map(rows.map((row, index) => [row.id, index])), [rows]);
 
   const selectedNodes = useMemo(() => rows.filter((row) => selected.has(row.id)), [rows, selected]);
@@ -403,6 +409,7 @@ export function CommitApp() {
         action,
         items: refs(changes),
         ...(preview ? { preview: true } : {}),
+        ...(action === 'showDiff' && changes.length === 1 ? { navigation: diffOrder.current } : {}),
       });
     },
     [],

@@ -498,3 +498,38 @@ describe('parseWebviewMessage', () => {
     ).toBeUndefined();
   });
 });
+
+describe('openDiff navigation', () => {
+  const base = {
+    type: 'openDiff',
+    requestId: 'diff-1',
+    repositoryId: 'repository-1',
+    hash: 'abcdef1',
+    path: 'b.ts',
+    status: 'M',
+  };
+
+  it('keeps the file list in order and rejects malformed entries', async () => {
+    const { parseWebviewMessage, MAX_DIFF_NAVIGATION_TARGETS } = await import('../../src/protocol/messages');
+    const navigation = [
+      { hash: 'abcdef1', parent: '1234567', path: 'a.ts', status: 'A' },
+      { hash: 'abcdef1', path: 'b.ts', oldPath: 'old/b.ts', status: 'R', ignored: true },
+    ];
+    expect(parseWebviewMessage({ ...base, navigation })).toMatchObject({
+      navigation: [
+        { hash: 'abcdef1', parent: '1234567', path: 'a.ts', status: 'A' },
+        { hash: 'abcdef1', path: 'b.ts', oldPath: 'old/b.ts', status: 'R' },
+      ],
+    });
+    expect(parseWebviewMessage({ ...base, navigation: [{ ...navigation[0], hash: '--all' }] })).toBeUndefined();
+    expect(parseWebviewMessage({ ...base, navigation: [{ ...navigation[0], path: '../x' }] })).toBeUndefined();
+    expect(parseWebviewMessage({ ...base, navigation: 'a.ts' })).toBeUndefined();
+    expect(
+      parseWebviewMessage({
+        ...base,
+        navigation: Array.from({ length: MAX_DIFF_NAVIGATION_TARGETS + 1 }, () => navigation[0]),
+      }),
+    ).toBeUndefined();
+    expect(parseWebviewMessage(base)).not.toHaveProperty('navigation');
+  });
+});

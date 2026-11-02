@@ -108,6 +108,16 @@ describe('commitPathspecs', () => {
 });
 
 describe('parseCommitWebviewMessage', () => {
+  it('accepts the diff navigation order of showDiff', () => {
+    const navigation = [{ repositoryId: 'r', path: 'a.ts' }, { repositoryId: 'r', path: 'b.ts' }];
+    expect(
+      parseCommitWebviewMessage({ type: 'action', action: 'showDiff', items: [navigation[1]], navigation }),
+    ).toEqual({ type: 'action', action: 'showDiff', items: [navigation[1]], navigation });
+    expect(
+      parseCommitWebviewMessage({ type: 'action', action: 'showDiff', items: [navigation[1]], navigation: [{ path: 'a.ts' }] }),
+    ).toBeUndefined();
+  });
+
   it('accepts valid messages and rejects malformed ones', () => {
     expect(
       parseCommitWebviewMessage({

@@ -1482,6 +1482,20 @@ select:focus-visible,
   background: var(--vscode-list-hoverBackground);
 }
 
+.file-row.is-selected {
+  background: var(--vscode-list-inactiveSelectionBackground);
+  color: var(--vscode-list-inactiveSelectionForeground, inherit);
+}
+
+/* The file open in the active editor tab: an inset bar keeps the row width unchanged. */
+.file-row.is-active-editor {
+  box-shadow: inset 2px 0 0 var(--vscode-focusBorder);
+}
+
+.file-row.is-active-editor .file-path {
+  font-weight: 600;
+}
+
 .file-status {
   width: 16px;
   font-weight: 700;

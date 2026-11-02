@@ -86,7 +86,14 @@ export type CommitAction =
 export type CommitWebviewMessage =
   | { type: 'ready' }
   | { type: 'refresh' }
-  | { type: 'action'; action: CommitAction; items: ChangeRef[]; preview?: boolean }
+  | {
+      type: 'action';
+      action: CommitAction;
+      items: ChangeRef[];
+      preview?: boolean;
+      /** Every file of the list in display order, so F7 in the diff can continue into the next one. */
+      navigation?: ChangeRef[];
+    }
   | {
       type: 'commit';
       message: string;
@@ -226,7 +233,13 @@ export function parseCommitWebviewMessage(value: unknown): CommitWebviewMessage 
       return { type: value.type };
     case 'action': {
       const items = parseItems(value.items);
-      if (!items || typeof value.action !== 'string' || !ACTIONS.has(value.action as CommitAction)) {
+      const navigation = value.navigation === undefined ? undefined : parseItems(value.navigation);
+      if (
+        !items ||
+        (value.navigation !== undefined && !navigation) ||
+        typeof value.action !== 'string' ||
+        !ACTIONS.has(value.action as CommitAction)
+      ) {
         return undefined;
       }
       return {
@@ -234,6 +247,7 @@ export function parseCommitWebviewMessage(value: unknown): CommitWebviewMessage 
         action: value.action as CommitAction,
         items,
         ...(value.preview === true ? { preview: true } : {}),
+        ...(navigation ? { navigation } : {}),
       };
     }
     case 'updateChecks': {

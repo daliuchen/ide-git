@@ -42,4 +42,9 @@ export class RepositoryRegistry {
   getRoot(repositoryId: string): string | undefined {
     return this.roots.get(repositoryId);
   }
+
+  /** Every known repository as `[id, root path]`. */
+  entries(): Array<[string, string]> {
+    return [...this.roots.entries()];
+  }
 }

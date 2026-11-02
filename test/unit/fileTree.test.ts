@@ -40,3 +40,19 @@ describe('buildFileTree', () => {
     ]);
   });
 });
+
+describe('flattenFileTree', () => {
+  it('lists files in the order the tree shows them', async () => {
+    const { buildFileTree, flattenFileTree } = await import('../../webview/src/buildFileTree');
+    const files: ChangedFile[] = [
+      { status: 'M', path: 'src/a.ts', binary: false },
+      { status: 'M', path: 'README.md', binary: false },
+      { status: 'A', path: 'src/b.ts', binary: false },
+    ];
+    expect(flattenFileTree(buildFileTree(files)).map((file) => file.path)).toEqual([
+      'src/a.ts',
+      'src/b.ts',
+      'README.md',
+    ]);
+  });
+});

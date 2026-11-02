@@ -2,6 +2,11 @@
 
 All notable changes to IDE Git are documented in this file.
 
+## 0.5.0
+
+- F7 / Shift+F7 in a diff opened from the Git Log or the Commit window steps through the changes and then continues into the next (or previous) file of the list: at the last change the status bar says which file comes next, and pressing again opens it at its first change.
+- Changed Files in the Git Log highlights the file shown in the active editor (a bar and bold name) and selects it, so it is easy to find and follows along while you step through files; a clicked file stays selected.
+
 ## 0.4.1
 
 - The Commit window, Git Log and dialogs no longer stay blank when they open while the extension is being installed or updated (the bundled script can be missing for a moment): the view reloads itself a few times, and if it still cannot start it says to run *Developer: Reload Window* instead of showing nothing.
