@@ -4,11 +4,16 @@ import type { GitRunner } from '../git/GitRunner';
 import type { GitService } from '../git/GitService';
 import type { FileHistoryService } from '../git/FileHistoryService';
 import type { GitOperationService } from '../git/GitOperationService';
+import { basename } from 'node:path';
 import type { DiffManager } from '../diff/DiffManager';
+import type { NavigableDiff } from '../diff/DiffNavigator';
+import type { ActiveEditorFile } from '../editor/activeEditorFile';
 import {
   parseWebviewMessage,
+  type ExtensionToWebviewMessage,
   type PersistedWorkbenchState,
   type WorkbenchCommand,
+  type WebviewToExtensionMessage,
   type WorkbenchLayout,
 } from '../protocol/messages';
 import type { RepositoryRegistry } from '../repositories/RepositoryRegistry';
@@ -34,10 +39,19 @@ interface WorkbenchViewSession {
   watchManager: RepositoryWatchManager;
   disposables: vscode.Disposable[];
   ready: boolean;
+  post(message: ExtensionToWebviewMessage): Promise<boolean>;
+}
+
+export interface DiffSequenceOpener {
+  open(items: readonly NavigableDiff[], index: number): Promise<void>;
 }
 
 export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   private session: WorkbenchViewSession | undefined;
+  private activeEditorFile: ActiveEditorFile | undefined;
+  private activeEditorFileSequence = 0;
+  /** Lets the owner re-resolve the active editor file once repositories are discovered. */
+  onDidChangeRepositories: (() => void) | undefined;
   private pendingHistoryRequest:
     | { kind: 'editor'; request: EditorHistoryRequest }
     | { kind: 'folder'; request: FolderHistoryRequest }
@@ -58,7 +72,52 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       repository: RepositorySummary,
       command: WorkbenchCommand,
     ) => Promise<void>,
+    private readonly diffSequence?: DiffSequenceOpener,
   ) {}
+
+  /** Highlights `file` in Changed Files; called whenever the active editor tab changes. */
+  setActiveEditorFile(file: ActiveEditorFile | undefined): void {
+    if (
+      file?.repositoryId === this.activeEditorFile?.repositoryId &&
+      file?.path === this.activeEditorFile?.path
+    ) {
+      return;
+    }
+    this.activeEditorFile = file;
+    if (this.session?.ready) void this.postActiveEditorFile(this.session);
+  }
+
+  private postActiveEditorFile(session: WorkbenchViewSession): Promise<boolean> {
+    this.activeEditorFileSequence += 1;
+    const file = this.activeEditorFile;
+    return session.post({
+      type: 'activeEditorFile',
+      requestId: `active-editor-${String(this.activeEditorFileSequence)}`,
+      ...(file ? { repositoryId: file.repositoryId, path: file.path } : {}),
+    });
+  }
+
+  private async openDiff(
+    repository: RepositorySummary,
+    request: Extract<WebviewToExtensionMessage, { type: 'openDiff' }>,
+  ): Promise<void> {
+    const navigation = request.navigation;
+    const index =
+      navigation?.findIndex(
+        (target) => target.path === request.path && target.hash === request.hash,
+      ) ?? -1;
+    if (!this.diffSequence || !navigation || index < 0) {
+      await this.diffManager.open(repository.id, request);
+      return;
+    }
+    await this.diffSequence.open(
+      navigation.map((target) => ({
+        label: basename(target.path),
+        open: () => this.diffManager.open(repository.id, target),
+      })),
+      index,
+    );
+  }
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.disposeSession();
@@ -154,8 +213,9 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
       onRepositoriesChanged: (discovered) => {
         this.repositories.replace(discovered);
         watchManager.replace(discovered);
+        this.onDidChangeRepositories?.();
       },
-      openDiff: (repository, request) => this.diffManager.open(repository.id, request),
+      openDiff: (repository, request) => this.openDiff(repository, request),
       openFile: (repository, request) =>
         this.diffManager.openFile(repository.id, vscode.Uri.parse(repository.rootUri), request),
       openCommitComparison: (repository, request, files) =>
@@ -164,7 +224,13 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
     });
     controllerRef.current = controller;
 
-    const session: WorkbenchViewSession = { controller, watchManager, disposables: [], ready: false };
+    const session: WorkbenchViewSession = {
+      controller,
+      watchManager,
+      disposables: [],
+      ready: false,
+      post: (message) => Promise.resolve(view.webview.postMessage(message)),
+    };
     session.disposables.push(
       webviewLoad,
       view.webview.onDidReceiveMessage((rawMessage: unknown) => {
@@ -177,6 +243,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
           await controller.handleMessage(message);
           if (message.type === 'ready' && this.session === session) {
             session.ready = true;
+            await this.postActiveEditorFile(session);
             await this.flushPendingHistory();
           }
         });

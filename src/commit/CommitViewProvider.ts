@@ -1,9 +1,10 @@
 import { randomBytes } from 'node:crypto';
 import { realpathSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as vscode from 'vscode';
 import type { DiffManager } from '../diff/DiffManager';
+import type { NavigableDiff } from '../diff/DiffNavigator';
 import { classifyGitError } from '../git/classifyGitError';
 import { GitCommandError, type GitRunner } from '../git/GitRunner';
 import { discoverRepositories, inspectRepository } from '../repositories/discoverRepositories';
@@ -52,6 +53,12 @@ export interface CommitViewHooks {
   /** Pushes after "Commit and Push"; resolves when the push dialog or push has finished. */
   push(repository: RepositorySummary): Promise<void>;
   onDidCommit?(repository: RepositorySummary): void;
+  /** Opens one diff of an ordered list, so F7 can continue into the next file. */
+  openDiffSequence?(
+    items: readonly NavigableDiff[],
+    index: number,
+    openFirst: () => Promise<void>,
+  ): Promise<void>;
 }
 
 export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
@@ -316,7 +323,7 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
         await this.refresh();
         return;
       case 'action':
-        await this.runAction(message.action, message.items, message.preview === true);
+        await this.runAction(message.action, message.items, message.preview === true, message.navigation);
         return;
       case 'operationControl':
         await this.controlOperation(message.repositoryId, message.action);
@@ -528,6 +535,52 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
     return [...groups.values()];
   }
 
+  private openLocalChange(
+    snapshot: RepositorySnapshot,
+    change: LocalChange,
+    preview: boolean,
+    preserveFocus: boolean,
+  ): Promise<void> {
+    return this.diffManager.openLocalChange(snapshot.repository.id, vscode.Uri.parse(snapshot.repository.rootUri), {
+      ...(snapshot.repository.head ? { head: snapshot.repository.head } : {}),
+      path: change.path,
+      ...(change.oldPath ? { oldPath: change.oldPath } : {}),
+      status: change.status,
+      preview,
+      preserveFocus,
+    });
+  }
+
+  /** Returns false when `target` is not part of `navigation`, so the caller opens it alone. */
+  private async openDiffInSequence(
+    target: { snapshot: RepositorySnapshot; change: LocalChange },
+    navigation: readonly ChangeRef[],
+    preview: boolean,
+  ): Promise<boolean> {
+    const openSequence = this.hooks.openDiffSequence;
+    if (!openSequence) return false;
+    const entries = navigation.flatMap((ref) => {
+      const snapshot = this.snapshots.get(ref.repositoryId);
+      const change = snapshot?.status.changes.find((candidate) => candidate.path === ref.path);
+      // Conflicts open in the merge editor, which has its own navigation.
+      return snapshot && change && change.status !== 'U' ? [{ snapshot, change }] : [];
+    });
+    const index = entries.findIndex(
+      (entry) =>
+        entry.snapshot.repository.id === target.snapshot.repository.id && entry.change.path === target.change.path,
+    );
+    if (index < 0) return false;
+    await openSequence(
+      entries.map(({ snapshot, change }) => ({
+        label: basename(change.path),
+        open: () => this.openLocalChange(snapshot, change, true, false),
+      })),
+      index,
+      () => this.openLocalChange(target.snapshot, target.change, true, preview),
+    );
+    return true;
+  }
+
   private uriFor(snapshot: RepositorySnapshot, path: string): vscode.Uri {
     return vscode.Uri.file(join(fileURLToPath(snapshot.repository.rootUri), path));
   }
@@ -536,12 +589,19 @@ export class CommitViewProvider implements vscode.WebviewViewProvider, vscode.Di
     action: CommitAction,
     items: readonly ChangeRef[],
     preview: boolean,
+    navigation?: readonly ChangeRef[],
   ): Promise<void> {
     const groups = this.resolve(items);
     const all = groups.flatMap(([snapshot, changes]) => changes.map((change) => ({ snapshot, change })));
     if (!all.length) return;
     switch (action) {
       case 'showDiff':
+        if (all.length === 1 && navigation && this.hooks.openDiffSequence) {
+          const [only] = all;
+          if (only && only.change.status !== 'U' && (await this.openDiffInSequence(only, navigation, preview))) {
+            return;
+          }
+        }
         for (const { snapshot, change } of all.slice(0, 20)) {
           if (change.status === 'U') {
             await this.openMerge(this.uriFor(snapshot, change.path));

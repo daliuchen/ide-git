@@ -14,6 +14,7 @@ import {
   type GraphContinuationState,
 } from '../../src/graph/layoutCommitGraph';
 import {
+  MAX_DIFF_NAVIGATION_TARGETS,
   parseWebviewMessage,
   type ErrorRecoveryAction,
   type ExtensionToWebviewMessage,
@@ -35,7 +36,7 @@ import type {
   StashEntry,
 } from '../../src/shared/models';
 import { getVsCodeApi } from './vscodeApi';
-import { buildFileTree, type FileTreeNode } from './buildFileTree';
+import { buildFileTree, flattenFileTree, type FileTreeNode } from './buildFileTree';
 import { buildRefTree, type RefTreeNode } from './buildRefTree';
 import { advanceCommitWindow } from './commitWindow';
 import { CommitList } from './CommitList';
@@ -256,23 +257,48 @@ function readScrollTopByRepository(value: unknown): Record<string, number> {
   return {};
 }
 
+interface FileRowHighlight {
+  /** The file shown in the active editor tab. */
+  activePath: string | undefined;
+  selected: ChangedFile | undefined;
+}
+
+function sameChangedFile(left: ChangedFile | undefined, right: ChangedFile): boolean {
+  return left?.path === right.path && left.oldPath === right.oldPath;
+}
+
 function ChangedFileRow({
   file,
   depth = 0,
+  highlight,
   onOpen,
   onSelect,
   onContextMenu,
 }: {
   file: ChangedFile;
   depth?: number;
+  highlight: FileRowHighlight;
   onOpen(file: ChangedFile): void;
   onSelect(file: ChangedFile): void;
   onContextMenu(file: ChangedFile, x: number, y: number): void;
 }) {
+  const active = highlight.activePath === file.path;
+  const selected = sameChangedFile(highlight.selected, file);
+  const rowRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const row = rowRef.current;
+    if (!active || !row) return;
+    for (let parent = row.parentElement; parent; parent = parent.parentElement) {
+      if (parent instanceof HTMLDetailsElement) parent.open = true;
+    }
+    row.scrollIntoView?.({ block: 'nearest' });
+  }, [active]);
   return (
     <button
+      ref={rowRef}
       type="button"
-      className="file-row"
+      className={`file-row${active ? ' is-active-editor' : ''}${selected ? ' is-selected' : ''}`}
+      {...(active ? { 'aria-current': 'true' as const } : {})}
       style={{ paddingLeft: 10 + depth * 14 }}
       title={file.binary ? `${file.path} is binary` : file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
       onClick={() => onSelect(file)}
@@ -305,12 +331,14 @@ function ChangedFileRow({
 function FileTreeNodes({
   nodes,
   depth,
+  highlight,
   onOpen,
   onSelect,
   onContextMenu,
 }: {
   nodes: FileTreeNode[];
   depth: number;
+  highlight: FileRowHighlight;
   onOpen(file: ChangedFile): void;
   onSelect(file: ChangedFile): void;
   onContextMenu(file: ChangedFile, x: number, y: number): void;
@@ -322,6 +350,7 @@ function FileTreeNodes({
         <FileTreeNodes
           nodes={node.children}
           depth={depth + 1}
+          highlight={highlight}
           onOpen={onOpen}
           onSelect={onSelect}
           onContextMenu={onContextMenu}
@@ -331,6 +360,7 @@ function FileTreeNodes({
       <ChangedFileRow
         file={node.file}
         depth={depth}
+        highlight={highlight}
         onOpen={onOpen}
         onSelect={onSelect}
         onContextMenu={onContextMenu}
@@ -634,6 +664,19 @@ export function App() {
     [visibleRefs],
   );
   const fileTree = useMemo(() => buildFileTree(state.files), [state.files]);
+  const [activeEditorFile, setActiveEditorFile] = useState<
+    { repositoryId: string; path: string } | undefined
+  >();
+  const fileRowHighlight = useMemo<FileRowHighlight>(
+    () => ({
+      activePath:
+        activeEditorFile && activeEditorFile.repositoryId === state.detailsRepositoryId
+          ? activeEditorFile.path
+          : undefined,
+      selected: state.selectedFile,
+    }),
+    [activeEditorFile, state.detailsRepositoryId, state.selectedFile],
+  );
   const headMatchesRefSearch = useMemo(() => {
     const query = refSearch.trim().toLocaleLowerCase();
     if (!query) return true;
@@ -859,6 +902,17 @@ export function App() {
       if (!message || typeof message !== 'object' || !('type' in message)) return;
 
       switch (message.type) {
+        case 'activeEditorFile': {
+          const { repositoryId, path } = message;
+          setActiveEditorFile(repositoryId && path ? { repositoryId, path } : undefined);
+          // Selection follows the editor, so stepping through files with F7 moves it along.
+          setState((current) => {
+            if (!repositoryId || repositoryId !== current.detailsRepositoryId) return current;
+            const file = current.files.find((candidate) => candidate.path === path);
+            return file && file !== current.selectedFile ? { ...current, selectedFile: file } : current;
+          });
+          break;
+        }
         case 'initialize':
           if (
             requestScopeById.current.get(message.requestId) === 'repositories' &&
@@ -1920,16 +1974,27 @@ export function App() {
       }));
       return;
     }
-    const parent = file.parentHash ?? state.selectedParent;
+    const details = state.details;
+    const target = (changed: ChangedFile) => {
+      const parent = changed.parentHash ?? state.selectedParent;
+      return {
+        hash: changed.commitHash ?? details.hash,
+        ...(parent ? { parent } : {}),
+        path: changed.path,
+        ...(changed.oldPath ? { oldPath: changed.oldPath } : {}),
+        status: changed.status,
+      };
+    };
+    const ordered = state.layout.filesViewMode === 'tree' ? flattenFileTree(fileTree) : state.files;
     send({
       type: 'openDiff',
       requestId: requestId('diff'),
       repositoryId: state.detailsRepositoryId,
-      hash: file.commitHash ?? state.details.hash,
-      ...(parent ? { parent } : {}),
-      path: file.path,
-      ...(file.oldPath ? { oldPath: file.oldPath } : {}),
-      status: file.status,
+      ...target(file),
+      navigation: ordered
+        .filter((changed) => !changed.binary)
+        .slice(0, MAX_DIFF_NAVIGATION_TARGETS)
+        .map(target),
     });
   };
 
@@ -3474,6 +3539,7 @@ export function App() {
                   <FileTreeNodes
                     nodes={fileTree}
                     depth={0}
+                    highlight={fileRowHighlight}
                     onOpen={openDiff}
                     onSelect={(file) => setState((current) => ({ ...current, selectedFile: file }))}
                     onContextMenu={(file, x, y) => {
@@ -3491,6 +3557,7 @@ export function App() {
                   state.files.map((file) => (
                     <ChangedFileRow
                       file={file}
+                      highlight={fileRowHighlight}
                       onOpen={openDiff}
                       onSelect={(selectedFile) =>
                         setState((current) => ({ ...current, selectedFile }))

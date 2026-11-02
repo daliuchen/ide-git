@@ -46,6 +46,7 @@ Uninstall the original **Git Log** (`ascenx.git-log`) first if you have it.
 | Resolve conflicts | Handle them in the Commit window, then **Continue** (or **Skip** / **Abort**) in the banner |
 | Push or pull | **Push…** / **Pull** on the Log toolbar |
 | Put work aside | Right-click files → **Shelve Changes…** |
+| Review a commit file by file | Double-click a file in **Changed Files**, then **F7** / **Shift+F7**: after the last change, press again to open the next file (also in the Commit window) |
 | See who changed each line | Editor right-click → *IDE Git → Annotate with Git Blame*; hover a line → **Show in Git Log** to jump to its commit |
 
 ## Screenshots
@@ -68,6 +69,17 @@ Add to *Preferences: Open Keyboard Shortcuts (JSON)* (press again to hide the si
 [
   { "key": "cmd+9", "command": "gitLogWorkbench.commit.open", "when": "activeViewlet != 'workbench.view.extension.gitLogCommit'" },
   { "key": "cmd+9", "command": "workbench.action.toggleSidebarVisibility", "when": "activeViewlet == 'workbench.view.extension.gitLogCommit'" }
+]
+```
+
+## F7 with a keymap extension
+
+If another extension also binds F7 (for example an IDE keymap), it may win over IDE Git's binding. Add these to *Preferences: Open Keyboard Shortcuts (JSON)*; they only apply in diffs opened from IDE Git:
+
+```json
+[
+  { "key": "f7", "command": "gitLogWorkbench.diff.nextChange", "when": "gitLogWorkbench.diffNavigation && textCompareEditorVisible" },
+  { "key": "shift+f7", "command": "gitLogWorkbench.diff.previousChange", "when": "gitLogWorkbench.diffNavigation && textCompareEditorVisible" }
 ]
 ```
 

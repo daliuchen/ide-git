@@ -46,6 +46,7 @@
 | 解决冲突 | Commit 窗口里处理冲突文件，然后点提示条上的 **Continue**（或 **Skip** / **Abort**） |
 | 推送、拉取 | Log 工具栏的 **Push…** / **Pull** |
 | 先把改动收起来 | 文件右键 → **Shelve Changes…** |
+| 逐个文件看一个提交的改动 | 在 **Changed Files** 里双击文件，然后按 **F7** / **Shift+F7**：到最后一处改动后再按一次就打开下一个文件（Commit 窗口里同样可用） |
 | 看每行是谁改的 | 编辑器右键 → *IDE Git → Annotate with Git Blame*；鼠标悬停某行 → **Show in Git Log** 跳到对应提交 |
 
 ## 截图
@@ -68,6 +69,17 @@
 [
   { "key": "cmd+9", "command": "gitLogWorkbench.commit.open", "when": "activeViewlet != 'workbench.view.extension.gitLogCommit'" },
   { "key": "cmd+9", "command": "workbench.action.toggleSidebarVisibility", "when": "activeViewlet == 'workbench.view.extension.gitLogCommit'" }
+]
+```
+
+## 装了其他快捷键插件时的 F7
+
+如果别的扩展也绑定了 F7（比如 IDE 快捷键插件），可能会盖过 IDE Git 的绑定。在 *Preferences: Open Keyboard Shortcuts (JSON)* 里加入下面两条，它们只在 IDE Git 打开的 Diff 里生效：
+
+```json
+[
+  { "key": "f7", "command": "gitLogWorkbench.diff.nextChange", "when": "gitLogWorkbench.diffNavigation && textCompareEditorVisible" },
+  { "key": "shift+f7", "command": "gitLogWorkbench.diff.previousChange", "when": "gitLogWorkbench.diffNavigation && textCompareEditorVisible" }
 ]
 ```
 

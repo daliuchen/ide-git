@@ -129,6 +129,8 @@ export type WebviewToExtensionMessage =
       path: string;
       oldPath?: string;
       status: ChangedFile['status'];
+      /** Every file of the list in display order, so F7 can continue into the next one. */
+      navigation?: DiffNavigationTarget[];
     }
   | {
       type: 'openFile';
@@ -227,7 +229,24 @@ export type WorkbenchCommand =
 
 export type ErrorRecoveryAction = { kind: 'forceDeleteBranch'; branch: string };
 
+export interface DiffNavigationTarget {
+  hash: string;
+  parent?: string;
+  path: string;
+  oldPath?: string;
+  status: ChangedFile['status'];
+}
+
+export const MAX_DIFF_NAVIGATION_TARGETS = 5_000;
+
 export type ExtensionToWebviewMessage =
+  | {
+      /** The file shown in the active editor tab, if it belongs to a known repository. */
+      type: 'activeEditorFile';
+      requestId: string;
+      repositoryId?: string;
+      path?: string;
+    }
   | {
       type: 'initialize';
       requestId: string;
@@ -473,6 +492,36 @@ function isRepositoryPath(value: unknown): value is string {
 
 function isChangedFileStatus(value: unknown): value is ChangedFile['status'] {
   return typeof value === 'string' && ['A', 'M', 'D', 'R', 'C', 'T', 'U'].includes(value);
+}
+
+function parseDiffNavigationTarget(value: Record<string, unknown>): DiffNavigationTarget | undefined {
+  if (
+    !isHash(value.hash) ||
+    !isRepositoryPath(value.path) ||
+    !isChangedFileStatus(value.status) ||
+    (value.parent !== undefined && !isHash(value.parent)) ||
+    (value.oldPath !== undefined && !isRepositoryPath(value.oldPath))
+  ) {
+    return undefined;
+  }
+  return {
+    hash: value.hash,
+    path: value.path,
+    status: value.status,
+    ...(typeof value.parent === 'string' ? { parent: value.parent } : {}),
+    ...(typeof value.oldPath === 'string' ? { oldPath: value.oldPath } : {}),
+  };
+}
+
+function parseDiffNavigationTargets(value: unknown): DiffNavigationTarget[] | undefined {
+  if (!Array.isArray(value) || value.length > MAX_DIFF_NAVIGATION_TARGETS) return undefined;
+  const targets: DiffNavigationTarget[] = [];
+  for (const item of value) {
+    const target = isRecord(item) ? parseDiffNavigationTarget(item) : undefined;
+    if (!target) return undefined;
+    targets.push(target);
+  }
+  return targets;
 }
 
 function isSafeGitToken(value: unknown): value is string {
@@ -901,27 +950,21 @@ export function parseWebviewMessage(value: unknown): WebviewToExtensionMessage |
       return isLayout(value.layout)
         ? { type: value.type, requestId: value.requestId, layout: value.layout }
         : undefined;
-    case 'openDiff':
-      if (
-        !hasRepository(value) ||
-        !isHash(value.hash) ||
-        !isRepositoryPath(value.path) ||
-        !isChangedFileStatus(value.status) ||
-        (value.parent !== undefined && !isHash(value.parent)) ||
-        (value.oldPath !== undefined && !isRepositoryPath(value.oldPath))
-      ) {
+    case 'openDiff': {
+      const target = parseDiffNavigationTarget(value);
+      const navigation =
+        value.navigation === undefined ? undefined : parseDiffNavigationTargets(value.navigation);
+      if (!hasRepository(value) || !target || (value.navigation !== undefined && !navigation)) {
         return undefined;
       }
       return {
         type: value.type,
         requestId: value.requestId,
         repositoryId: value.repositoryId,
-        hash: value.hash,
-        path: value.path,
-        status: value.status,
-        ...(typeof value.parent === 'string' ? { parent: value.parent } : {}),
-        ...(typeof value.oldPath === 'string' ? { oldPath: value.oldPath } : {}),
+        ...target,
+        ...(navigation ? { navigation } : {}),
       };
+    }
     case 'openFile':
       if (
         !hasRepository(value) ||

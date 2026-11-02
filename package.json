@@ -2,7 +2,7 @@
   "name": "ide-git",
   "displayName": "IDE Git — IntelliJ-style Commit, Log & Rebase",
   "description": "The IntelliJ-style Git tool for Cursor and VS Code: a commit window with chunk- and line-level commits, branch comparison and cherry-pick, interactive rebase, a push dialog, and editable diffs.",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "publisher": "EthanLiuChen",
   "license": "MIT",
   "packageManager": "pnpm@10.33.0",
@@ -102,6 +102,16 @@
         "icon": "$(go-to-file)"
       },
       {
+        "command": "gitLogWorkbench.diff.nextChange",
+        "title": "Next Difference (continues into the next file)",
+        "category": "IDE Git"
+      },
+      {
+        "command": "gitLogWorkbench.diff.previousChange",
+        "title": "Previous Difference (continues into the previous file)",
+        "category": "IDE Git"
+      },
+      {
         "command": "gitLogWorkbench.push",
         "title": "Push…",
         "category": "IDE Git",
@@ -184,6 +194,14 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "gitLogWorkbench.diff.nextChange",
+          "when": "textCompareEditorVisible"
+        },
+        {
+          "command": "gitLogWorkbench.diff.previousChange",
+          "when": "textCompareEditorVisible"
+        },
         {
           "command": "gitLogWorkbench.explorer.showFolderHistory",
           "when": "false"
@@ -371,6 +389,16 @@
         "command": "gitLogWorkbench.diff.jumpToSource",
         "key": "f4",
         "when": "editorTextFocus && resourceScheme == git-log-workbench"
+      },
+      {
+        "command": "gitLogWorkbench.diff.nextChange",
+        "key": "f7",
+        "when": "gitLogWorkbench.diffNavigation && textCompareEditorVisible"
+      },
+      {
+        "command": "gitLogWorkbench.diff.previousChange",
+        "key": "shift+f7",
+        "when": "gitLogWorkbench.diffNavigation && textCompareEditorVisible"
       }
     ]
   },

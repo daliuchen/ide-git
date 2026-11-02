@@ -49,3 +49,8 @@ export function buildFileTree(files: readonly ChangedFile[]): FileTreeNode[] {
 
   return root;
 }
+
+/** The files of a tree in the order they are shown. */
+export function flattenFileTree(nodes: readonly FileTreeNode[]): ChangedFile[] {
+  return nodes.flatMap((node) => (node.type === 'file' ? [node.file] : flattenFileTree(node.children)));
+}

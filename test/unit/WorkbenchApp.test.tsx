@@ -691,6 +691,62 @@ describe('WorkbenchApp', () => {
     });
   });
 
+  it('highlights the file open in the editor and sends the file order with a diff', () => {
+    const { newest } = initializeCommitRangeFixture();
+    const newestRow = screen.getByText('newest commit').closest('[role="row"]') as HTMLElement;
+    fireEvent.click(newestRow);
+    const selectionRequest = postedMessages.at(-1);
+    if (!selectionRequest || selectionRequest.type !== 'selectCommit') throw new Error('no selection');
+    const dispatch = (data: ExtensionToWebviewMessage) =>
+      act(() => {
+        window.dispatchEvent(new MessageEvent('message', { data }));
+      });
+    const file = (path: string, binary = false) => ({ status: 'M' as const, path, binary });
+    dispatch({
+      type: 'selectionDetailsLoaded',
+      requestId: selectionRequest.requestId,
+      repositoryId: 'repo-commit-range',
+      details: {
+        hash: newest,
+        parents: ['d'.repeat(40)],
+        subject: 'newest commit',
+        body: 'newest commit\n',
+        authorName: 'Carol',
+        authorEmail: 'carol@example.com',
+        authorTime: 1,
+        commitTime: 1,
+        committerName: 'Carol',
+        committerEmail: 'carol@example.com',
+        refs: [],
+        signature: 'none',
+      },
+      files: [file('README.md'), file('app/models/user.rb'), file('logo.png', true), file('app/a.rb')],
+    });
+    const row = (name: string) => screen.getByText(name).closest('button') as HTMLElement;
+
+    dispatch({ type: 'activeEditorFile', requestId: 'a1', repositoryId: 'repo-commit-range', path: 'app/a.rb' });
+    expect(row('a.rb')).toHaveAttribute('aria-current', 'true');
+    expect(row('user.rb')).not.toHaveAttribute('aria-current');
+    expect(row('a.rb')).toHaveClass('is-selected');
+    dispatch({ type: 'activeEditorFile', requestId: 'a2', repositoryId: 'other-repo', path: 'app/a.rb' });
+    expect(row('a.rb')).not.toHaveAttribute('aria-current');
+
+    fireEvent.click(row('user.rb'));
+    expect(row('user.rb')).toHaveClass('is-selected');
+
+    fireEvent.doubleClick(row('user.rb'));
+    const diff = postedMessages.at(-1);
+    expect(diff).toMatchObject({ type: 'openDiff', path: 'app/models/user.rb' });
+    if (!diff || diff.type !== 'openDiff') return;
+    // Tree order, binary files left out.
+    expect(diff.navigation?.map((target) => target.path)).toEqual([
+      'README.md',
+      'app/models/user.rb',
+      'app/a.rb',
+    ]);
+    expect(parseWebviewMessage(diff)).toEqual(diff);
+  });
+
   it('restores every selected commit supplied by repository data', () => {
     const { newest, oldest, commits } = initializeCommitRangeFixture();
     act(() => {

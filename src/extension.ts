@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import * as vscode from 'vscode';
 import { DiffManager } from './diff/DiffManager';
+import { DiffNavigator } from './diff/DiffNavigator';
 import { jumpToSource } from './diff/jumpToSource';
 import { releaseNativeDiffResourcesIfUnused } from './diff/NativeDiffResources';
 import { RevisionContentLoader } from './diff/RevisionContentLoader';
@@ -9,6 +10,7 @@ import {
   WORKING_SNAPSHOT_SCHEME,
   WorkingSnapshotContentProvider,
 } from './diff/WorkingSnapshotContentProvider';
+import { resolveActiveEditorFile } from './editor/activeEditorFile';
 import { EditorFileComparisonCommand } from './editor/EditorFileComparisonCommand';
 import {
   CURRENT_LINE_BLAME_CONFIGURATION_KEYS,
@@ -383,6 +385,7 @@ export function activate(context: vscode.ExtensionContext): void {
       },
     },
   );
+  const diffNavigator = new DiffNavigator();
   const workbenchProvider = new WorkbenchViewProvider(
     context,
     output,
@@ -393,6 +396,7 @@ export function activate(context: vscode.ExtensionContext): void {
     repositories,
     diffManager,
     (repository, command) => runWorkbenchCommand(commandHost, repository, command),
+    diffNavigator,
   );
   const workbenchViewRegistration = vscode.window.registerWebviewViewProvider(
     'gitLogWorkbench.log',
@@ -410,6 +414,7 @@ export function activate(context: vscode.ExtensionContext): void {
       push: async (repository) => {
         await vscode.commands.executeCommand('gitLogWorkbench.push', repository.rootUri);
       },
+      openDiffSequence: (items, index, openFirst) => diffNavigator.open(items, index, openFirst),
     },
   );
   commitPanel.focus = (message) => commitViewProvider.focus(message);
@@ -610,8 +615,38 @@ export function activate(context: vscode.ExtensionContext): void {
     },
   });
 
+  let activeEditorFileGeneration = 0;
+  const updateActiveEditorFile = (): void => {
+    const generation = ++activeEditorFileGeneration;
+    const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+    const resource =
+      input instanceof vscode.TabInputTextDiff
+        ? input.modified
+        : input instanceof vscode.TabInputText
+          ? input.uri
+          : undefined;
+    if (!resource) {
+      workbenchProvider.setActiveEditorFile(undefined);
+      return;
+    }
+    void resolveActiveEditorFile(resource, repositories.entries()).then((file) => {
+      if (generation === activeEditorFileGeneration) workbenchProvider.setActiveEditorFile(file);
+    });
+  };
+  workbenchProvider.onDidChangeRepositories = updateActiveEditorFile;
+  updateActiveEditorFile();
+
   context.subscriptions.push(
     output,
+    diffNavigator,
+    vscode.window.tabGroups.onDidChangeTabs(updateActiveEditorFile),
+    vscode.window.tabGroups.onDidChangeTabGroups(updateActiveEditorFile),
+    vscode.commands.registerCommand('gitLogWorkbench.diff.nextChange', () =>
+      diffNavigator.navigate('next'),
+    ),
+    vscode.commands.registerCommand('gitLogWorkbench.diff.previousChange', () =>
+      diffNavigator.navigate('previous'),
+    ),
     disposeGitStateSubscriptions,
     new vscode.Disposable(() => {
       if (lineBlameTimer) clearTimeout(lineBlameTimer);
