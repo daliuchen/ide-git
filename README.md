@@ -49,7 +49,7 @@ Uninstall the original **Git Log** (`ascenx.git-log`) first if you have it.
 | Push or pull | **Push…** / **Pull** on the Log toolbar |
 | Put work aside | Right-click files → **Shelve Changes…** |
 | Review a commit file by file | Double-click a file in **Changed Files**, then **F7** / **Shift+F7**: after the last change, press again to open the next file (also in the Commit window); the list selects the file being shown |
-| See who changed each line | Editor right-click → *IDE Git → Annotate with Git Blame*; hover a line → **Show in Git Log** to jump to its commit |
+| See who changed each line | Editor right-click → *IDE Git → Annotate with Git Blame*; hover a line → **Show in Git Log** to jump to its commit, or **Annotate Previous Revision** to see who wrote it before |
 
 ## Screenshots
 

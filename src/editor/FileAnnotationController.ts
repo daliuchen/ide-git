@@ -6,6 +6,9 @@ import type { GitRunner } from '../git/GitRunner';
 import type { RepositoryRegistry } from '../repositories/RepositoryRegistry';
 import { inspectRepository } from '../repositories/discoverRepositories';
 import { parseBlamePorcelain, type BlameLine } from '../git/parsers/parseBlamePorcelain';
+import { mapLineToOldSide } from '../git/worktreeLineMapping';
+import { encodeRevisionQuery, parseRevisionQuery } from '../diff/diffModel';
+import { REVISION_SCHEME } from '../diff/RevisionContentProvider';
 
 const UNCOMMITTED = /^0+$/u;
 
@@ -72,6 +75,11 @@ export class FileAnnotationController implements vscode.Disposable {
       vscode.commands.registerCommand('gitLogWorkbench.annotate.copyHash', (hash: string) =>
         vscode.env.clipboard.writeText(hash),
       ),
+      vscode.commands.registerCommand(
+        'gitLogWorkbench.annotate.previousRevision',
+        (repositoryId: string, previousHash: string, previousPath: string, hash: string, path: string, sourceLine: number) =>
+          this.annotatePreviousRevision(repositoryId, previousHash, previousPath, hash, path, sourceLine),
+      ),
       vscode.window.onDidChangeVisibleTextEditors(() => this.renderVisible()),
       vscode.workspace.onDidChangeTextDocument((event) => {
         const key = event.document.uri.toString();
@@ -131,11 +139,11 @@ export class FileAnnotationController implements vscode.Disposable {
 
   private async toggle(resource?: vscode.Uri): Promise<void> {
     const document =
-      resource && resource.scheme === 'file'
+      resource && (resource.scheme === 'file' || resource.scheme === REVISION_SCHEME)
         ? (vscode.window.visibleTextEditors.find((editor) => editor.document.uri.toString() === resource.toString())
             ?.document ?? (await vscode.workspace.openTextDocument(resource)))
         : vscode.window.activeTextEditor?.document;
-    if (document?.uri.scheme !== 'file') {
+    if (document?.uri.scheme !== 'file' && !(document && this.revisionOf(document))) {
       void vscode.window.showInformationMessage('Annotate works on files in a Git repository.');
       return;
     }
@@ -158,7 +166,36 @@ export class FileAnnotationController implements vscode.Disposable {
     }
   }
 
+  /** The commit and path a read-only revision document shows, when its repository is known. */
+  private revisionOf(
+    document: vscode.TextDocument,
+  ): { repositoryId: string; root: string; revision: string; path: string } | undefined {
+    if (document.uri.scheme !== REVISION_SCHEME) return undefined;
+    const query = parseRevisionQuery(document.uri.query);
+    const root = query ? this.registry.getRoot(query.repositoryId) : undefined;
+    if (!query || query.empty || !query.revision || !root) return undefined;
+    return { repositoryId: query.repositoryId, root, revision: query.revision, path: query.path };
+  }
+
   private async load(document: vscode.TextDocument): Promise<void> {
+    const revision = this.revisionOf(document);
+    if (revision) {
+      // A committed version: blame that commit directly instead of the editor's text.
+      const result = await this.runner.run(
+        ['blame', '--porcelain', '-w', revision.revision, '--', revision.path],
+        { cwd: revision.root, timeoutMs: 60_000, maxStdoutBytes: 64 * 1024 * 1024, env: { GIT_LITERAL_PATHSPECS: '1' } },
+      );
+      this.annotated.set(document.uri.toString(), {
+        root: revision.root,
+        repositoryId: revision.repositoryId,
+        path: revision.path,
+        lines: parseBlamePorcelain(result.stdout.toString('utf8')),
+      });
+      this.renderVisible();
+      this.updateContext();
+      this.changeEmitter.fire();
+      return;
+    }
     const repository = await inspectRepository(dirname(document.uri.fsPath), this.runner);
     if (!repository) throw new Error('The file is not in a Git repository.');
     // Resolve symlinks on both sides (e.g. /tmp → /private/tmp on macOS) so the relative path is right.
@@ -221,6 +258,7 @@ export class FileAnnotationController implements vscode.Disposable {
             'gitLogWorkbench.showCommitInLog',
             'gitLogWorkbench.annotate.showDiff',
             'gitLogWorkbench.annotate.copyHash',
+            'gitLogWorkbench.annotate.previousRevision',
           ],
         };
         if (uncommitted) {
@@ -239,8 +277,20 @@ export class FileAnnotationController implements vscode.Disposable {
           hover.appendText(`${line.author} · ${new Date(line.authorTime * 1000).toLocaleString()}`);
           hover.appendMarkdown('\n\n');
           hover.appendText(line.summary);
+          const previous = line.previous
+            ? ` · [$(history) Annotate Previous Revision](command:gitLogWorkbench.annotate.previousRevision?${encodeURIComponent(
+                JSON.stringify([
+                  annotation.repositoryId,
+                  line.previous.hash,
+                  line.previous.filename,
+                  line.hash,
+                  line.filename || annotation.path,
+                  line.sourceLine,
+                ]),
+              )})`
+            : '';
           hover.appendMarkdown(
-            `\n\n[$(git-commit) Show in Git Log](command:gitLogWorkbench.showCommitInLog?${encodeURIComponent(JSON.stringify([annotation.root, line.hash]))}) · [$(diff) Show Diff](command:gitLogWorkbench.annotate.showDiff?${args}) · [$(copy) Copy Hash](command:gitLogWorkbench.annotate.copyHash?${encodeURIComponent(JSON.stringify([line.hash]))})`,
+            `\n\n[$(git-commit) Show in Git Log](command:gitLogWorkbench.showCommitInLog?${encodeURIComponent(JSON.stringify([annotation.root, line.hash]))}) · [$(diff) Show Diff](command:gitLogWorkbench.annotate.showDiff?${args}) · [$(copy) Copy Hash](command:gitLogWorkbench.annotate.copyHash?${encodeURIComponent(JSON.stringify([line.hash]))})${previous}`,
           );
         }
         options.push({
@@ -260,6 +310,68 @@ export class FileAnnotationController implements vscode.Disposable {
         });
       }
       editor.setDecorations(this.decoration, options);
+    }
+  }
+
+  /**
+   * Opens the file as it was before `hash` changed this line, annotated too, with the cursor on
+   * the line it came from, so blame can be followed further back.
+   */
+  private async annotatePreviousRevision(
+    repositoryId: string,
+    previousHash: string,
+    previousPath: string,
+    hash: string,
+    path: string,
+    sourceLine: number,
+  ): Promise<void> {
+    const isHash = (value: unknown) => typeof value === 'string' && /^[0-9a-f]{40,64}$/u.test(value);
+    const isPath = (value: unknown) => typeof value === 'string' && value.length > 0 && !value.includes('\0');
+    if (!isHash(previousHash) || !isHash(hash) || !isPath(previousPath) || !isPath(path) || !Number.isSafeInteger(sourceLine)) {
+      return;
+    }
+    const root = this.registry.getRoot(repositoryId);
+    if (!root) {
+      void vscode.window.showErrorMessage('The repository for this annotation is no longer available.');
+      return;
+    }
+    let line = sourceLine;
+    try {
+      const diff = await this.runner.run(
+        ['diff', '-U0', '--no-color', `${previousHash}:${previousPath}`, `${hash}:${path}`],
+        { cwd: root, timeoutMs: 30_000 },
+      );
+      line = mapLineToOldSide(diff.stdout, sourceLine);
+    } catch {
+      // Keep the same line number.
+    }
+    // The short hash in the path tells the tabs apart; the content comes from the query.
+    const uri = vscode.Uri.from({
+      scheme: REVISION_SCHEME,
+      path: `/${previousHash.slice(0, 8)}/${previousPath}`,
+      query: encodeRevisionQuery({ repositoryId, revision: previousHash, path: previousPath, empty: false }),
+    });
+    try {
+      const document = await vscode.workspace.openTextDocument(uri);
+      const position = new vscode.Position(Math.min(Math.max(0, line - 1), Math.max(0, document.lineCount - 1)), 0);
+      await vscode.window.showTextDocument(document, {
+        preview: false,
+        selection: new vscode.Range(position, position),
+      });
+      vscode.window.activeTextEditor?.revealRange(
+        new vscode.Range(position, position),
+        vscode.TextEditorRevealType.InCenter,
+      );
+      if (!this.annotated.has(uri.toString())) {
+        await vscode.window.withProgress(
+          { location: vscode.ProgressLocation.Window, title: 'Git blame…' },
+          () => this.load(document),
+        );
+      }
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        `Unable to annotate the previous revision: ${error instanceof Error ? (error.message.split('\n')[0] ?? error.message) : String(error)}`,
+      );
     }
   }
 
