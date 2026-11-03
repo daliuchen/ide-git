@@ -22,7 +22,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       release: ${{ steps.version.outputs.release }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -47,13 +47,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version-file: .tool-versions
           cache: pnpm
@@ -82,7 +82,7 @@ jobs:
           VSIX="ide-git-${{ needs.check.outputs.version }}.vsix"
           test -f "$VSIX" || { echo "Expected $VSIX" >&2; ls *.vsix >&2; exit 1; }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: vsix
           path: ide-git-${{ needs.check.outputs.version }}.vsix
@@ -96,11 +96,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: vsix
 
@@ -138,11 +138,11 @@ jobs:
       # Trusted publishing: the job's OIDC token is exchanged for a short-lived Open VSX token.
       id-token: write
     steps:
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: vsix
 
