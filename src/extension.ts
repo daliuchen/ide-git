@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { DiffManager } from './diff/DiffManager';
 import { parseRevisionQuery } from './diff/diffModel';
 import { DiffNavigator } from './diff/DiffNavigator';
+import { F7ConflictAdvisor } from './diff/F7ConflictAdvisor';
 import { jumpToSource } from './diff/jumpToSource';
 import { releaseNativeDiffResourcesIfUnused } from './diff/NativeDiffResources';
 import { RevisionContentLoader } from './diff/RevisionContentLoader';
@@ -388,7 +389,8 @@ export function activate(context: vscode.ExtensionContext): void {
       },
     },
   );
-  const diffNavigator = new DiffNavigator();
+  const f7ConflictAdvisor = new F7ConflictAdvisor(context);
+  const diffNavigator = new DiffNavigator(() => void f7ConflictAdvisor.check());
   const workbenchProvider = new WorkbenchViewProvider(
     context,
     output,

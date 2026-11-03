@@ -76,7 +76,7 @@ Add to *Preferences: Open Keyboard Shortcuts (JSON)* (press again to hide the si
 
 ## F7 with a keymap extension
 
-If another extension also binds F7 (for example an IDE keymap), it may win over IDE Git's binding. Add these to *Preferences: Open Keyboard Shortcuts (JSON)*; they only apply in diffs opened from IDE Git:
+If another extension also binds F7 (for example an IDE keymap), it may win over IDE Git's binding. IDE Git notices this the first time you open a diff and offers **Add Shortcuts**, which adds the two lines below to your keyboard shortcuts (keeping a backup). To add them yourself, put them in *Preferences: Open Keyboard Shortcuts (JSON)*; they only apply in diffs opened from IDE Git:
 
 ```json
 [

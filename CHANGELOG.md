@@ -2,6 +2,10 @@
 
 All notable changes to IDE Git are documented in this file.
 
+## 0.9.0
+
+- When another extension (an IDE keymap, for example) also binds F7, IDE Git says so the first time you open a diff and offers **Add Shortcuts**: it adds its two F7 / Shift+F7 shortcuts to your keyboard shortcuts file (keeping a backup) so F7 continues into the next file. **Don't Ask Again** turns the notice off.
+
 ## 0.8.0
 
 - Annotate Previous Revision: the Annotate hover has a new link that opens the file as it was before that commit changed the line, annotated as well and with the cursor on the line it came from, so you can keep following a line back through its history (renames included). Annotate can also be turned on and off on these read-only revisions.

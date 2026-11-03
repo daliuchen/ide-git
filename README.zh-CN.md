@@ -76,7 +76,7 @@
 
 ## 装了其他快捷键插件时的 F7
 
-如果别的扩展也绑定了 F7（比如 IDE 快捷键插件），可能会盖过 IDE Git 的绑定。在 *Preferences: Open Keyboard Shortcuts (JSON)* 里加入下面两条，它们只在 IDE Git 打开的 Diff 里生效：
+如果别的扩展也绑定了 F7（比如 IDE 快捷键插件），可能会盖过 IDE Git 的绑定。第一次打开 Diff 时 IDE Git 会发现这种情况并提示，点 **Add Shortcuts** 就会把下面两条写进你的快捷键文件（会先留备份）。也可以自己在 *Preferences: Open Keyboard Shortcuts (JSON)* 里加入这两条，它们只在 IDE Git 打开的 Diff 里生效：
 
 ```json
 [
