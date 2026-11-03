@@ -33,4 +33,11 @@ export default tseslint.config(
       '@typescript-eslint/consistent-type-imports': 'error',
     },
   },
+  {
+    // End-to-end scripts run directly in Node.
+    files: ['test/e2e/**/*.mjs'],
+    languageOptions: {
+      globals: { process: 'readonly', console: 'readonly', setTimeout: 'readonly', URL: 'readonly' },
+    },
+  },
 );

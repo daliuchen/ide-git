@@ -7,7 +7,7 @@
 - Cursor / VS Code 扩展，fork 自 [ascenx/vscode-git-log](https://github.com/ascenx/vscode-git-log)。扩展 ID `EthanLiuChen.ide-git`（Open VSX 命名空间 `EthanLiuChen`）。
 - `src/`：扩展端（Node）。`src/git/` 封装 Git 命令，`src/commit/` 是 Commit 窗口，`src/dialogs/` 是 Push / Rebase 对话框，`src/protocol/` 是 webview 消息协议。
 - `webview/src/`：React 写的界面。`App.tsx` 是 Log，`commit/` 是 Commit 窗口，`dialog/` 是对话框。
-- `test/unit/`：vitest 单测；`test/integration/`：在 VS Code 1.85.2 里跑的集成测试。
+- `test/unit/`：vitest 单测；`test/integration/`：在 VS Code 1.85.2 里跑的集成测试；`test/e2e/`：用 Playwright 驱动真实 VS Code 的端到端测试（见 `test/e2e/README.md`）。
 - `design/`：技术方案（见规则二）。
 
 ### 环境
@@ -22,6 +22,7 @@ pnpm run typecheck          # tsc --noEmit
 pnpm run lint               # eslint
 pnpm run test:unit          # vitest
 pnpm run test:integration   # VS Code 1.85.2 集成测试
+pnpm run test:e2e           # 真实 VS Code 1.144 端到端测试（macOS，几分钟）
 pnpm run package            # 打出 .vsix
 cursor --install-extension ide-git-<版本>.vsix --force   # 装到本机 Cursor 试用
 ```
@@ -54,7 +55,7 @@ cursor --install-extension ide-git-<版本>.vsix --force   # 装到本机 Cursor
 
 1. `pnpm run typecheck`、`pnpm run lint`、`pnpm run test:unit` 全绿。
 2. 改了 Git 行为、扩展激活、命令注册时，还要跑 `pnpm run test:integration`。
-3. 改了界面或交互时，用 `pnpm run package` 打包装进 Cursor，亲手走一遍改动涉及的流程，并截图。
+3. 改了界面或交互时，跑 `pnpm run test:e2e`，并给新功能在 `test/e2e/suites/` 里加一个场景；再用 `pnpm run package` 打包装进 Cursor，亲手走一遍改动涉及的流程，并截图。
 4. 用户能感知到的变化：更新 `CHANGELOG.md` 顶部版本段落，并**同时**更新 `README.md`（英文）和 `README.zh-CN.md`（中文）。
 5. 有技术方案的需求，方案文档（`design/…`）要随 PR 一起提交，并补上「实际实现与偏差」一节。
 
@@ -63,6 +64,7 @@ cursor --install-extension ide-git-<版本>.vsix --force   # 装到本机 Cursor
 - 合并到 `main` 后，`.github/workflows/release.yml` 会检查 `package.json` 的版本号：没有对应的 `v<版本>` tag 时，自动测试、打包、打 tag、建 GitHub Release（说明取自 CHANGELOG 对应段落），并发布到 Open VSX；版本号没变就什么都不做。
 - 要发新版本：在 PR 里把 `package.json` 的 `version` 按语义化版本升一级（修复升 patch，新功能升 minor），并在 `CHANGELOG.md` 顶部写好这一版的 `## <版本>` 段落。缺这一段，发版会失败。
 - Open VSX 用受信任发布（OIDC），仓库里不存 token。
+- 几个都升了版本的 PR 要**逐个合并**：合一个，等它的发版跑完，再把下一个 rebase 到最新 `main`（会在版本号和 CHANGELOG 顶部冲突）后合并。发版 workflow 在同一个并发组里排队，排进第三个时会取消还在等待的那个，连续合并可能漏发版本。
 
 ### PR 标题和描述
 

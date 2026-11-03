@@ -87,7 +87,7 @@
 
 ## 开发
 
-用 asdf 管 Node、pnpm 装依赖：`pnpm install && pnpm run test:unit && pnpm run package`。开发规范见 [AGENTS.md](AGENTS.md)。
+用 asdf 管 Node、pnpm 装依赖：`pnpm install && pnpm run test:unit && pnpm run package`。在真实 VS Code 里跑端到端测试：`pnpm run test:e2e`（见 [test/e2e](test/e2e/README.md)）。开发规范见 [AGENTS.md](AGENTS.md)。
 
 ## 关于开发方式
 
