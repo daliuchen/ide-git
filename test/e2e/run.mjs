@@ -27,9 +27,21 @@ for (const name of selected.length ? selected : available) {
   console.log(`\n${name}`);
   let session;
   try {
+    const skipReason = suite.skip?.();
+    if (skipReason) {
+      console.log(`  SKIP ${skipReason}`);
+      summary.push({ name, passed: 0, total: 0, skipped: true });
+      continue;
+    }
     const workspace = suite.setup(directory);
-    session = await launch(workspace, suite.launch ?? {});
-    await suite.run({ page: session.page, check, workspace, shot: (label) => shot(session.page, `${name}-${label}`) });
+    session = await launch(workspace, typeof suite.launch === 'function' ? suite.launch() : (suite.launch ?? {}));
+    await suite.run({
+      page: session.page,
+      check,
+      workspace,
+      userKeybindings: session.userKeybindings,
+      shot: (label) => shot(session.page, `${name}-${label}`),
+    });
   } catch (error) {
     check('suite ran to the end', false, error instanceof Error ? error.message.split('\n')[0] : String(error));
     if (session) await shot(session.page, `${name}-error`).catch(() => undefined);
@@ -41,5 +53,7 @@ for (const name of selected.length ? selected : available) {
 }
 
 console.log('\nSummary');
-for (const { name, passed, total } of summary) console.log(`  ${passed === total ? 'ok  ' : 'FAIL'} ${name} ${String(passed)}/${String(total)}`);
+for (const { name, passed, total, skipped } of summary) {
+  console.log(`  ${skipped ? 'skip' : passed === total ? 'ok  ' : 'FAIL'} ${name} ${skipped ? '' : `${String(passed)}/${String(total)}`}`);
+}
 process.exitCode = summary.every(({ passed, total }) => passed === total) ? 0 : 1;

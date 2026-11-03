@@ -23,11 +23,18 @@ export default {
     const sleep = (ms) => page.waitForTimeout(ms);
     // The rendered hover uses non-breaking spaces.
     const words = (text) => new RegExp(text.split(' ').join('\\s+'), 'u');
+    // The annotation and its hover can take a while on a cold start, so keep trying for a bit.
     const hover = async (lineNumber) => {
-      const box = await page.locator('.monaco-editor .view-line').nth(lineNumber - 1).boundingBox();
-      await page.mouse.move(box.x + 40, box.y + box.height / 2);
-      await sleep(1800);
       const widget = page.locator('.monaco-hover:visible').first();
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        const box = await page.locator('.monaco-editor .view-line').nth(lineNumber - 1).boundingBox();
+        await page.mouse.move(box.x + 300, box.y + box.height / 2);
+        await sleep(300);
+        await page.mouse.move(box.x + 40, box.y + box.height / 2);
+        await sleep(1800);
+        const text = await widget.innerText().catch(() => '');
+        if (/Show\s+Diff/u.test(text)) return { widget, text };
+      }
       return { widget, text: await widget.innerText().catch(() => '') };
     };
     await openFile(page, 'new.rb');

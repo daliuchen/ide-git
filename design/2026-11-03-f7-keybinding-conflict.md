@@ -54,4 +54,4 @@ IDE 本身没有这个问题（快捷键方案是统一的）。照 VS Code 扩�
 - 检查挂在 `DiffNavigator` 的构造参数 `onOpen` 上：每次从列表打开 Diff 都调用，`F7ConflictAdvisor` 自己保证每个窗口只检查一次。
 - 用户快捷键文件位置按「默认配置」推算（`globalStorageUri` 上两级）。使用了其他配置（profile）时会写到默认配置的文件里，在那种配置下不生效——扩展拿不到当前 profile 的路径，这次不处理；手动加的办法仍写在 README 里。
 - 单测抓到一个 bug：最后一条绑定后面跟着注释（`} // mine`）时，插入会把注释吞掉，已改为保留最后一条与 `]` 之间的内容。
-- 验证：单测 4 个（找冲突扩展：排除自己、排除只在调试时生效的绑定、mac/key 区分；插入：已有列表、空文件、空数组、结尾逗号、注释和字符串里的括号、非数组）；VS Code 1.144 + IntelliJ 快捷键插件实测 5 项：提示点名该插件、点 Add Shortcuts 后文件里有两条、文件被打开、之后 F7 能跨到 b.ts、不再重复提示。e2e 场景等 #13（test/e2e）合并后补进 `test/e2e/suites/`。
+- 验证：单测 4 个（找冲突扩展：排除自己、排除只在调试时生效的绑定、mac/key 区分；插入：已有列表、空文件、空数组、结尾逗号、注释和字符串里的括号、非数组）；VS Code 1.144 + IntelliJ 快捷键插件实测 5 项：提示点名该插件、点 Add Shortcuts 后文件里有两条、文件被打开、之后 F7 能跨到 b.ts、不再重复提示。e2e 场景 `test/e2e/suites/f7-keybinding-conflict.mjs`（5 项）。它用本机已安装在 Cursor / VS Code 里的 IntelliJ 快捷键插件，没有安装时跳过——原本想让测试从 Open VSX 下载该插件，但运行时下载并执行第三方扩展被本机的自动权限检查拦下，改为只用本机已有的副本。顺带：e2e 的 runner 支持 `skip()`、函数形式的 `launch()`、`userKeybindings()`；Annotate 场景在冷启动时悬停卡片出现得慢，改成重试。
