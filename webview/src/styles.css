@@ -1208,12 +1208,33 @@ select:focus-visible,
   gap: 8px;
 }
 
-.stash-tool-row > span {
+.stash-tool-row > .stash-message {
   min-width: 0;
-  flex: 1 1 220px;
+  flex: 1 1 160px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.stash-meta {
+  display: inline-flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 8px;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+}
+
+/* Same shape as branch labels in the log, so it reads as a branch name. */
+.stash-branch {
+  overflow: hidden;
+  max-width: 180px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  text-overflow: ellipsis;
 }
 
 .stash-tool-row button {

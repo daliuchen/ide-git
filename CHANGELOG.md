@@ -2,6 +2,10 @@
 
 All notable changes to IDE Git are documented in this file.
 
+## 0.10.0
+
+- Stashes: each stash shows the branch it was made on and when, next to its message (Git's "On main:" prefix is no longer repeated in the message). Hover for the stash ref and the full date.
+
 ## 0.9.0
 
 - When another extension (an IDE keymap, for example) also binds F7, IDE Git says so the first time you open a diff and offers **Add Shortcuts**: it adds its two F7 / Shift+F7 shortcuts to your keyboard shortcuts file (keeping a backup) so F7 continues into the next file. **Don't Ask Again** turns the notice off.

@@ -47,7 +47,7 @@ Uninstall the original **Git Log** (`ascenx.git-log`) first if you have it.
 | See where my branch stands | The status bar on the right shows `main ↑2 ↓1`; click it for Branches |
 | Switch branches with uncommitted work | Check out as usual; if your changes are in the way, pick **Smart Checkout** to carry them over |
 | Push or pull | **Push…** / **Pull** on the Log toolbar |
-| Put work aside | Right-click files → **Shelve Changes…** |
+| Put work aside | Right-click files → **Shelve Changes…**; find them under **Stashes** on the Log toolbar, with their branch and time |
 | Review a commit file by file | Double-click a file in **Changed Files**, then **F7** / **Shift+F7**: after the last change, press again to open the next file (also in the Commit window); the list selects the file being shown |
 | See who changed each line | Editor right-click → *IDE Git → Annotate with Git Blame*; hover a line → **Show in Git Log** to jump to its commit, or **Annotate Previous Revision** to see who wrote it before |
 
