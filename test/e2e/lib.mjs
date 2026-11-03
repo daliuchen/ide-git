@@ -1,7 +1,8 @@
 // Drives a real VS Code with the extension under development, through the Chrome DevTools
 // protocol. See test/e2e/README.md.
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { downloadAndUnzipVSCode } from '@vscode/test-electron';
 import { chromium } from 'playwright-core';
@@ -50,6 +51,23 @@ export function writeFiles(root, files) {
     mkdirSync(join(root, path, '..'), { recursive: true });
     writeFileSync(join(root, path), content);
   }
+}
+
+/**
+ * The folder of an extension already installed in Cursor or VS Code on this machine (the newest
+ * version), or undefined. Suites that need a competing extension use it instead of downloading.
+ */
+export function installedExtension(id) {
+  const roots = [join(homedir(), '.cursor', 'extensions'), join(homedir(), '.vscode', 'extensions')];
+  for (const root of roots) {
+    if (!existsSync(root)) continue;
+    const match = readdirSync(root)
+      .filter((name) => name.toLowerCase().startsWith(`${id.toLowerCase()}-`))
+      .sort()
+      .at(-1);
+    if (match) return join(root, match);
+  }
+  return undefined;
 }
 
 /** Launches VS Code on `workspace` and returns the workbench page. */
@@ -123,7 +141,14 @@ export async function launch(workspace, { keybindings, extraExtensions = [] } = 
     await new Promise((done) => setTimeout(done, 1500));
     rmSync(profile, { recursive: true, force: true });
   };
-  return { page, close };
+  const userKeybindings = () => {
+    try {
+      return readFileSync(join(profile, 'User', 'keybindings.json'), 'utf8');
+    } catch {
+      return '';
+    }
+  };
+  return { page, close, userKeybindings };
 }
 
 export async function shot(page, name) {

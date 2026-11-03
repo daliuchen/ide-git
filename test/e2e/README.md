@@ -26,5 +26,8 @@ Export `{ setup(directory), run({ page, check, workspace, shot }), launch? }` fr
 - `setup` creates the repository and returns the folder to open (use `initRepository`,
   `writeFiles` and `git` from `lib.mjs`).
 - `run` uses Playwright's `page` and records results with `check(label, ok, detail)`.
-- `launch` can pass `keybindings` or `extraExtensions` (other extension folders to load, e.g. a
-  keymap extension that competes for the same keys).
+- `launch` (an object, or a function returning one) can pass `keybindings` or `extraExtensions`
+  (other extension folders to load). `installedExtension(id)` finds one already installed in
+  Cursor or VS Code on this machine; nothing is downloaded.
+- `skip()` may return a reason to skip the suite, e.g. when such an extension is not installed.
+- `run` also gets `userKeybindings()`, the test profile's keybindings.json.

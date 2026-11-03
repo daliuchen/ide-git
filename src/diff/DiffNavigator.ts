@@ -59,7 +59,8 @@ export class DiffNavigator implements vscode.Disposable {
   private contextValue = false;
   private readonly disposables: vscode.Disposable[];
 
-  constructor() {
+  /** `onOpen` runs whenever a diff is opened from a file list. */
+  constructor(private readonly onOpen?: () => void) {
     this.disposables = [
       vscode.window.onDidChangeActiveTextEditor(() => this.updateContext()),
       vscode.window.tabGroups.onDidChangeTabs(() => this.updateContext()),
@@ -77,6 +78,7 @@ export class DiffNavigator implements vscode.Disposable {
   ): Promise<void> {
     const item = items[index];
     if (!item) return;
+    this.onOpen?.();
     this.gate.reset();
     await (openFirst ?? item.open)();
     const input = activeDiffInput();
