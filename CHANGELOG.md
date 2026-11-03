@@ -2,6 +2,10 @@
 
 All notable changes to IDE Git are documented in this file.
 
+## 0.6.0
+
+- Status bar: the current branch of the active file's repository, with commits ahead of (↑) and behind (↓) its upstream, on the right of the status bar. A detached HEAD shows the commit, and a rebase, merge or cherry-pick in progress is named. Click it to open Branches. Turn it off with `gitLogWorkbench.statusBar.branch.enabled`.
+
 ## 0.5.1
 
 - The Commit window also selects and marks the file shown in the active editor, so its selection follows along while you step through files with F7 (it stayed on the file you first opened).
