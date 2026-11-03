@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import * as vscode from 'vscode';
+import { promptCheckoutConflict } from '../git/checkoutConflictPrompt';
 import { classifyGitError } from '../git/classifyGitError';
 import type { GitOperationService } from '../git/GitOperationService';
 import { GitCommandError, type GitRunner } from '../git/GitRunner';
@@ -178,9 +179,11 @@ export class BranchesPopup {
                 { modal: true, detail: confirmation.detail },
                 confirmation.confirmLabel,
               )) === confirmation.confirmLabel,
+            resolveCheckoutConflict: promptCheckoutConflict,
           }),
       );
-      if (!result.cancelled) vscode.window.setStatusBarMessage(`$(check) ${operation.kind} completed`, 4_000);
+      if (result.notice) void vscode.window.showInformationMessage(result.notice);
+      else if (!result.cancelled) vscode.window.setStatusBarMessage(`$(check) ${operation.kind} completed`, 4_000);
     } catch (error) {
       const message =
         error instanceof GitCommandError

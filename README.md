@@ -45,6 +45,7 @@ Uninstall the original **Git Log** (`ascenx.git-log`) first if you have it.
 | Take a commit from another branch | Show that branch → right-click the commit → **Cherry-pick** |
 | Resolve conflicts | Handle them in the Commit window, then **Continue** (or **Skip** / **Abort**) in the banner |
 | See where my branch stands | The status bar on the right shows `main ↑2 ↓1`; click it for Branches |
+| Switch branches with uncommitted work | Check out as usual; if your changes are in the way, pick **Smart Checkout** to carry them over |
 | Push or pull | **Push…** / **Pull** on the Log toolbar |
 | Put work aside | Right-click files → **Shelve Changes…** |
 | Review a commit file by file | Double-click a file in **Changed Files**, then **F7** / **Shift+F7**: after the last change, press again to open the next file (also in the Commit window); the list selects the file being shown |
