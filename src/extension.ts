@@ -1,6 +1,7 @@
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import * as vscode from 'vscode';
 import { DiffManager } from './diff/DiffManager';
+import { parseRevisionQuery } from './diff/diffModel';
 import { DiffNavigator } from './diff/DiffNavigator';
 import { jumpToSource } from './diff/jumpToSource';
 import { releaseNativeDiffResourcesIfUnused } from './diff/NativeDiffResources';
@@ -39,6 +40,7 @@ import { GitOperationService } from './git/GitOperationService';
 import { LineBlameService } from './git/LineBlameService';
 import { registerExtension } from './registerExtension';
 import { RepositoryRegistry } from './repositories/RepositoryRegistry';
+import { BranchStatusBar } from './statusBar/BranchStatusBar';
 import { WorkbenchViewProvider } from './webview/WorkbenchPanel';
 import { CommitViewProvider } from './commit/CommitViewProvider';
 import { BranchesPopup } from './branches/BranchesPopup';
@@ -287,6 +289,7 @@ export function activate(context: vscode.ExtensionContext): void {
     gitRepositorySubscriptions.set(
       repository,
       repository.state.onDidChange(() => {
+        branchStatusBarRef.current?.schedule();
         lineBlameService.invalidate();
         currentLineBlame.invalidate();
         scheduleLineBlame(0);
@@ -324,9 +327,9 @@ export function activate(context: vscode.ExtensionContext): void {
       );
     });
   };
-  if (customLineBlameEnabled()) {
-    ensureGitStateSubscriptions();
-  }
+  const branchStatusBarRef: { current?: BranchStatusBar } = {};
+  // The branch widget also relies on these notifications, so subscribe whenever it may be shown.
+  ensureGitStateSubscriptions();
   const workingSnapshots = new WorkingSnapshotContentProvider(
     maximumDiffFileBytes,
     maximumDiffFileBytes * 8,
@@ -618,6 +621,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   let activeEditorFileGeneration = 0;
   const updateActiveEditorFile = (): void => {
+    branchStatusBarRef.current?.schedule();
     const generation = ++activeEditorFileGeneration;
     const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
     const resource =
@@ -637,12 +641,31 @@ export function activate(context: vscode.ExtensionContext): void {
       commitViewProvider.setActiveEditorFile(file);
     });
   };
+  const branchStatusBar = new BranchStatusBar(runner, () => {
+    const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+    const resource =
+      input instanceof vscode.TabInputTextDiff
+        ? input.modified
+        : input instanceof vscode.TabInputText
+          ? input.uri
+          : undefined;
+    const revision = resource?.scheme === REVISION_SCHEME ? parseRevisionQuery(resource.query) : undefined;
+    const path =
+      resource?.scheme === 'file'
+        ? dirname(resource.fsPath)
+        : revision
+          ? repositories.getRoot(revision.repositoryId)
+          : vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    return path ? { path, repositoryCount: Math.max(1, repositories.entries().length) } : undefined;
+  });
+  branchStatusBarRef.current = branchStatusBar;
   workbenchProvider.onDidChangeRepositories = updateActiveEditorFile;
   updateActiveEditorFile();
 
   context.subscriptions.push(
     output,
     diffNavigator,
+    branchStatusBar,
     vscode.window.tabGroups.onDidChangeTabs(updateActiveEditorFile),
     vscode.window.tabGroups.onDidChangeTabGroups(updateActiveEditorFile),
     vscode.commands.registerCommand('gitLogWorkbench.diff.nextChange', () =>
