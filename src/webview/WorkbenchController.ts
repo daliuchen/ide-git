@@ -5,6 +5,7 @@ import type { FileHistoryService } from '../git/FileHistoryService';
 import { classifyGitError } from '../git/classifyGitError';
 import {
   type GitOperationResult,
+  type GitOperationRunOptions,
   type GitOperationService,
   type OperationConfirmation,
 } from '../git/GitOperationService';
@@ -78,6 +79,7 @@ export interface WorkbenchControllerOptions {
   copyToClipboard?(text: string): Promise<void>;
   operationService?: Pick<GitOperationService, 'run'>;
   confirmOperation?(confirmation: OperationConfirmation): Promise<boolean>;
+  resolveCheckoutConflict?: GitOperationRunOptions['resolveCheckoutConflict'];
   /** Shows an informational message, such as a cherry-pick that had nothing to apply. */
   showInformation?(message: string): void;
   withProgress?<T>(title: string, task: () => Promise<T>): Promise<T>;
@@ -1366,6 +1368,9 @@ export class WorkbenchController {
           }
           return this.options.confirmOperation(confirmation);
         },
+        ...(this.options.resolveCheckoutConflict
+          ? { resolveCheckoutConflict: this.options.resolveCheckoutConflict }
+          : {}),
       }) ??
       Promise.reject(new Error('Git operations are not available.'));
     const ignoreRefreshCancellation = (error: unknown): void => {

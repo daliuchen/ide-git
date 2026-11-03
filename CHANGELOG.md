@@ -2,6 +2,10 @@
 
 All notable changes to IDE Git are documented in this file.
 
+## 0.7.0
+
+- Smart Checkout: when local changes stop a checkout (from the Log, Branches or a dialog), a dialog lists the files and offers **Smart Checkout** (stash, check out, restore the changes), **Force Checkout** (discard the changes to those files) or Cancel. If restoring causes conflicts, they show up in the Commit window and the changes stay in the stash until you drop it.
+
 ## 0.6.0
 
 - Status bar: the current branch of the active file's repository, with commits ahead of (↑) and behind (↓) its upstream, on the right of the status bar. A detached HEAD shows the commit, and a rebase, merge or cherry-pick in progress is named. Click it to open Branches. Turn it off with `gitLogWorkbench.statusBar.branch.enabled`.

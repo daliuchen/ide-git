@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import * as vscode from 'vscode';
+import { promptCheckoutConflict } from '../git/checkoutConflictPrompt';
 import type { DiffManager } from '../diff/DiffManager';
 import { classifyGitError } from '../git/classifyGitError';
 import type { GitOperationService } from '../git/GitOperationService';
@@ -317,8 +318,10 @@ export class GitDialogs implements vscode.Disposable {
                 { modal: true, detail: confirmation.detail },
                 confirmation.confirmLabel,
               )) === confirmation.confirmLabel,
+            resolveCheckoutConflict: promptCheckoutConflict,
           }),
       );
+      if (result.notice) void vscode.window.showInformationMessage(result.notice);
       return { ok: !result.cancelled };
     } catch (error) {
       return { ok: false, error: errorText(error) };

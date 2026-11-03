@@ -6,6 +6,7 @@ import type { GitOperationRequest, RebaseStep } from '../protocol/messages';
 import type { RepositorySummary } from '../shared/models';
 import { inspectRepository } from '../repositories/discoverRepositories';
 import { GitCommandError, type GitRunner } from './GitRunner';
+import { parseCheckoutConflict, type CheckoutConflict } from './checkoutConflicts';
 
 export interface GitOperationResult {
   message: string;
@@ -28,6 +29,32 @@ export function sequencerArguments(
 
 export interface GitOperationRunOptions {
   confirm?(confirmation: OperationConfirmation): Promise<boolean>;
+  /**
+   * Asked when local changes stop a checkout: stash them and bring them back afterwards
+   * ('smart'), discard them ('force'), or keep the error (undefined). Without it the Git error is
+   * reported as is.
+   */
+  resolveCheckoutConflict?(conflict: CheckoutConflict): Promise<'smart' | 'force' | undefined>;
+}
+
+type CheckoutOperation = Extract<
+  GitOperationRequest,
+  { kind: 'checkout' | 'checkoutRemote' | 'checkoutDetached' | 'switchPrevious' }
+>;
+
+function isCheckoutOperation(operation: GitOperationRequest): operation is CheckoutOperation {
+  return (
+    operation.kind === 'checkout' ||
+    operation.kind === 'checkoutRemote' ||
+    operation.kind === 'checkoutDetached' ||
+    operation.kind === 'switchPrevious'
+  );
+}
+
+/** The same checkout, discarding local changes that would be overwritten. */
+export function forcedCheckoutArguments(args: readonly string[]): string[] {
+  const [command, ...rest] = args;
+  return command === 'switch' ? ['switch', '--discard-changes', ...rest] : ['checkout', '-f', ...rest];
 }
 
 export interface GitOperationServiceOptions {
@@ -697,6 +724,8 @@ export class GitOperationService {
           await this.getFromRevision(freshRepository, preparedOperation.hash, preparedOperation.paths);
         } else if (preparedOperation.kind === 'cherryPick') {
           return this.cherryPick(freshRepository, preparedOperation.hash);
+        } else if (isCheckoutOperation(preparedOperation)) {
+          return this.checkout(freshRepository, preparedOperation, options);
         } else {
           const args =
             preparedOperation.kind === 'rebaseContinue' ||
@@ -951,6 +980,93 @@ export class GitOperationService {
    * Cherry-picks one commit. When its change is already in the branch, Git stops with nothing to
    * commit; that stop is skipped right away and reported, instead of leaving a pick in progress.
    */
+  private async checkout(
+    repository: RepositorySummary,
+    operation: CheckoutOperation,
+    options: GitOperationRunOptions,
+  ): Promise<GitOperationResult> {
+    const cwd = fileURLToPath(repository.rootUri);
+    const args = buildOperationArguments(operation);
+    const run = (checkoutArgs: readonly string[]) =>
+      this.runner.run(checkoutArgs, { cwd, timeoutMs: 10 * 60_000 });
+    try {
+      await run(args);
+      return { message: `${operation.kind} completed.` };
+    } catch (error) {
+      const conflict =
+        error instanceof GitCommandError ? parseCheckoutConflict(error.stderr.toString('utf8')) : undefined;
+      if (!conflict || !options.resolveCheckoutConflict) throw error;
+      const choice = await options.resolveCheckoutConflict(conflict);
+      if (!choice) return { message: '', cancelled: true };
+      if (choice === 'force') {
+        await this.removeUntrackedFiles(cwd, conflict.untracked);
+        await run(forcedCheckoutArguments(args));
+        return { message: `${operation.kind} completed.`, notice: 'Checked out; local changes to the listed files were discarded.' };
+      }
+      return this.smartCheckout(cwd, args, run);
+    }
+  }
+
+  /** Stash, check out, and bring the changes back, as the IDE's Smart Checkout does. */
+  private async smartCheckout(
+    cwd: string,
+    args: readonly string[],
+    run: (checkoutArgs: readonly string[]) => Promise<unknown>,
+  ): Promise<GitOperationResult> {
+    const stashTip = async () =>
+      (await this.runner.run(['rev-parse', '-q', '--verify', 'refs/stash'], { cwd, timeoutMs: 30_000 }).catch(() => undefined))
+        ?.stdout.toString('utf8')
+        .trim();
+    const before = await stashTip();
+    const from = (await this.runner.run(['branch', '--show-current'], { cwd, timeoutMs: 30_000 })).stdout.toString('utf8').trim();
+    await this.runner.run(
+      ['stash', 'push', '--include-untracked', '-m', `IDE Git smart checkout from ${from || 'detached HEAD'}`],
+      { cwd, timeoutMs: 10 * 60_000 },
+    );
+    const stashed = (await stashTip()) !== before;
+    try {
+      await run(args);
+    } catch (error) {
+      // Put everything back where it was before reporting the failure.
+      if (stashed) {
+        const pop = (popArgs: string[]) => this.runner.run(popArgs, { cwd, timeoutMs: 10 * 60_000 });
+        await pop(['stash', 'pop', '--index']).catch(() => pop(['stash', 'pop'])).catch(() => undefined);
+      }
+      throw error;
+    }
+    if (!stashed) return { message: 'checkout completed.' };
+    try {
+      await this.runner.run(['stash', 'pop'], { cwd, timeoutMs: 10 * 60_000 });
+    } catch {
+      // Git keeps the stash when it cannot apply it cleanly, so nothing is lost.
+      const unmerged = await this.runner.run(['diff', '--name-only', '--diff-filter=U'], { cwd, timeoutMs: 30_000 });
+      return {
+        message: 'checkout completed.',
+        notice: unmerged.stdout.toString('utf8').trim()
+          ? 'Checked out, but restoring your local changes caused conflicts. Resolve them in the Commit window; the changes are also kept in stash@{0} until you drop it.'
+          : 'Checked out, but some local changes could not be restored because files with the same names now exist. They are kept in stash@{0}; unstash them from Stashes in the Git Log when ready.',
+      };
+    }
+    return { message: 'checkout completed.', notice: 'Checked out; your local changes were restored.' };
+  }
+
+  /** Deletes untracked files that block a forced checkout, after checking each one really is. */
+  private async removeUntrackedFiles(cwd: string, paths: readonly string[]): Promise<void> {
+    for (const path of paths) {
+      const target = normalize(join(cwd, path));
+      if (!target.startsWith(normalize(cwd + '/'))) throw new Error(`Refusing to delete ${path}: outside the repository.`);
+      const listed = await this.runner.run(['ls-files', '--others', '-z', '--', path], {
+        cwd,
+        timeoutMs: 30_000,
+        env: { GIT_LITERAL_PATHSPECS: '1' },
+      });
+      if (!listed.stdout.toString('utf8').split('\0').includes(path)) {
+        throw new Error(`Refusing to delete ${path}: it is not an untracked file.`);
+      }
+      await rm(target, { force: true });
+    }
+  }
+
   private async cherryPick(repository: RepositorySummary, hash: string): Promise<GitOperationResult> {
     const cwd = fileURLToPath(repository.rootUri);
     try {
