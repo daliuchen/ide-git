@@ -38,6 +38,7 @@ import type {
 import { getVsCodeApi } from './vscodeApi';
 import { buildFileTree, flattenFileTree, type FileTreeNode } from './buildFileTree';
 import { buildRefTree, type RefTreeNode } from './buildRefTree';
+import { parseStashSubject } from './stashLabel';
 import { advanceCommitWindow } from './commitWindow';
 import { CommitList } from './CommitList';
 import { formatCommitDate } from './formatCommitDate';
@@ -4714,9 +4715,20 @@ export function App() {
                 </button>
               </div>
               {stashDialog.loading ? <span>Loading…</span> : null}
-              {stashDialog.stashes.map((stash) => (
+              {stashDialog.stashes.map((stash) => {
+                const label = parseStashSubject(stash.subject);
+                return (
                 <div className="stash-tool-row" key={stash.ref}>
-                  <span>{stash.subject}</span>
+                  <span className="stash-message" title={stash.subject}>
+                    {label.message || stash.ref}
+                  </span>
+                  <span
+                    className="stash-meta"
+                    title={`${stash.ref} · ${new Date(stash.timestamp * 1000).toLocaleString()}`}
+                  >
+                    <span className="stash-branch">{label.branch ?? 'detached HEAD'}</span>
+                    <span className="stash-time">{formatCommitDate(stash.timestamp)}</span>
+                  </span>
                   <button
                     type="button"
                     aria-label={`Show changes for ${stash.ref}`}
@@ -4768,7 +4780,8 @@ export function App() {
                     Drop…
                   </button>
                 </div>
-              ))}
+                );
+              })}
             </section>
           </div>
         </div>

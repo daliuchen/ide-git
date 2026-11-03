@@ -545,7 +545,7 @@ describe('WorkbenchApp', () => {
                 ref: 'stash@{0}',
                 hash: stashHash,
                 timestamp: 1700000000,
-                subject: 'saved work',
+                subject: 'On feature/x: saved work',
               },
             ],
           },
@@ -554,6 +554,9 @@ describe('WorkbenchApp', () => {
     });
 
     expect(screen.getByText('saved work')).toBeInTheDocument();
+    // The branch the stash was made on and when, instead of Git's raw "On <branch>:" prefix.
+    expect(screen.getByText('feature/x')).toBeInTheDocument();
+    expect(screen.getByText('feature/x').closest('[title]')?.getAttribute('title')).toContain('stash@{0}');
     fireEvent.click(screen.getByRole('button', { name: 'Show changes for stash@{0}' }));
     fireEvent.change(screen.getByRole('textbox', { name: 'Stash message' }), {
       target: { value: 'work in progress' },
