@@ -6,21 +6,24 @@ export interface BlameLine {
   /** Path of the file in that commit (it may have been renamed since). */
   filename: string;
   previous?: { hash: string; filename: string };
+  /** 1-based line number of this line in the blamed commit's version of the file. */
+  sourceLine: number;
 }
 
 /** Parses `git blame --porcelain` into one entry per final line. */
 export function parseBlamePorcelain(output: string): BlameLine[] {
-  const commits = new Map<string, Omit<BlameLine, 'hash'>>();
+  const commits = new Map<string, Omit<BlameLine, 'hash' | 'sourceLine'>>();
   const lines: BlameLine[] = [];
   const records = output.split('\n');
   let index = 0;
   while (index < records.length) {
     const header = records[index] ?? '';
-    const match = /^([0-9a-f]{40,64}) \d+ (\d+)/u.exec(header);
+    const match = /^([0-9a-f]{40,64}) (\d+) (\d+)/u.exec(header);
     index += 1;
     if (!match) continue;
     const hash = match[1] ?? '';
-    const info: Partial<Omit<BlameLine, 'hash'>> = { ...commits.get(hash) };
+    const sourceLine = Number(match[2]);
+    const info: Partial<Omit<BlameLine, 'hash' | 'sourceLine'>> = { ...commits.get(hash) };
     while (index < records.length && !(records[index] ?? '').startsWith('\t')) {
       const line = records[index] ?? '';
       const space = line.indexOf(' ');
@@ -37,7 +40,7 @@ export function parseBlamePorcelain(output: string): BlameLine[] {
       index += 1;
     }
     index += 1; // the content line
-    const complete: Omit<BlameLine, 'hash'> = {
+    const complete: Omit<BlameLine, 'hash' | 'sourceLine'> = {
       author: info.author ?? '',
       authorTime: info.authorTime ?? 0,
       summary: info.summary ?? '',
@@ -45,7 +48,7 @@ export function parseBlamePorcelain(output: string): BlameLine[] {
       ...(info.previous ? { previous: info.previous } : {}),
     };
     commits.set(hash, complete);
-    lines.push({ hash, ...complete });
+    lines.push({ hash, ...complete, sourceLine });
   }
   return lines;
 }

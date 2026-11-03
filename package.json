@@ -2,7 +2,7 @@
   "name": "ide-git",
   "displayName": "IDE Git — IntelliJ-style Commit, Log & Rebase",
   "description": "The IntelliJ-style Git tool for Cursor and VS Code: a commit window with chunk- and line-level commits, branch comparison and cherry-pick, interactive rebase, a push dialog, and editable diffs.",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "publisher": "EthanLiuChen",
   "license": "MIT",
   "packageManager": "pnpm@10.33.0",
@@ -218,7 +218,7 @@
       "gitLogWorkbench.editorContext": [
         {
           "command": "gitLogWorkbench.editor.toggleAnnotate",
-          "when": "resourceScheme == file",
+          "when": "resourceScheme == file || resourceScheme == git-log-workbench",
           "group": "0_annotate@1"
         },
         {
@@ -267,7 +267,7 @@
       "editor/lineNumber/context": [
         {
           "command": "gitLogWorkbench.editor.toggleAnnotate",
-          "when": "resourceScheme == file",
+          "when": "resourceScheme == file || resourceScheme == git-log-workbench",
           "group": "navigation@100"
         },
         {

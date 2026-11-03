@@ -2,6 +2,10 @@
 
 All notable changes to IDE Git are documented in this file.
 
+## 0.8.0
+
+- Annotate Previous Revision: the Annotate hover has a new link that opens the file as it was before that commit changed the line, annotated as well and with the cursor on the line it came from, so you can keep following a line back through its history (renames included). Annotate can also be turned on and off on these read-only revisions.
+
 ## 0.7.0
 
 - Smart Checkout: when local changes stop a checkout (from the Log, Branches or a dialog), a dialog lists the files and offers **Smart Checkout** (stash, check out, restore the changes), **Force Checkout** (discard the changes to those files) or Cancel. If restoring causes conflicts, they show up in the Commit window and the changes stay in the stash until you drop it.

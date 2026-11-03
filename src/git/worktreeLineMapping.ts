@@ -84,3 +84,16 @@ export function mapWorktreeLineRange(
     partiallyUncommitted,
   };
 }
+
+/**
+ * Maps a line of the new side of `diff` to the old side. A line inside a changed block maps to
+ * where that block starts on the old side, which is where the line "came from" for blame.
+ */
+export function mapLineToOldSide(diff: string | Buffer, line: number): number {
+  const hunks = parseHunks(typeof diff === 'string' ? diff : diff.toString('utf8'));
+  const mapped = mapLine(line, hunks);
+  if (mapped !== undefined) return Math.max(1, mapped);
+  const containing = hunks.find((hunk) => line >= hunk.newStart && line < hunk.newStart + hunk.newCount);
+  // An insertion (oldCount 0) sits after oldStart; a replaced block starts at oldStart.
+  return Math.max(1, containing ? containing.oldStart + (containing.oldCount === 0 ? 1 : 0) : line);
+}
