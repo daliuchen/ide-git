@@ -417,6 +417,7 @@
     "test:unit": "vitest run test/unit",
     "test:integration": "pnpm run build && node ./scripts/run-integration.mjs",
     "test:performance": "vitest run test/performance",
+    "test:e2e": "pnpm run build && node test/e2e/run.mjs",
     "package": "pnpm run clean && pnpm run build && vsce package --no-dependencies --baseContentUrl https://github.com/daliuchen/ide-git/blob/main --baseImagesUrl https://raw.githubusercontent.com/daliuchen/ide-git/main"
   },
   "dependencies": {
@@ -442,6 +443,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "jsdom": "^27.0.0",
+    "playwright-core": "1.55.0",
     "prettier": "^3.6.2",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.67.0",

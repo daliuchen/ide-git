@@ -87,7 +87,7 @@ If another extension also binds F7 (for example an IDE keymap), it may win over 
 
 ## Development
 
-Node via asdf, dependencies via pnpm: `pnpm install && pnpm run test:unit && pnpm run package`. Contribution rules: [AGENTS.md](AGENTS.md).
+Node via asdf, dependencies via pnpm: `pnpm install && pnpm run test:unit && pnpm run package`. End-to-end tests in a real VS Code: `pnpm run test:e2e` ([test/e2e](test/e2e/README.md)). Contribution rules: [AGENTS.md](AGENTS.md).
 
 ## How this was built
 
