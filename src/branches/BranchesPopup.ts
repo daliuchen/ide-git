@@ -46,6 +46,12 @@ export class BranchesPopup {
       { label: '$(git-commit) Checkout Tag or Revision…', run: () => this.checkoutRevision(repository) },
       { label: '$(repo-pull) Update Project…', run: async () => { await vscode.commands.executeCommand('gitLogWorkbench.updateProject', repository.rootUri); } },
       { label: '$(repo-push) Push…', run: () => this.openPush(repository) },
+      {
+        label: '$(remote) Manage Remotes…',
+        run: async () => {
+          await vscode.commands.executeCommand('gitLogWorkbench.manageRemotes', repository.rootUri);
+        },
+      },
       { label: 'Local', kind: vscode.QuickPickItemKind.Separator },
       ...branches.filter((branch) => branch.kind === 'local').map(toItem),
       { label: 'Remote', kind: vscode.QuickPickItemKind.Separator },

@@ -7,6 +7,7 @@ import type { RepositorySummary } from '../shared/models';
 import { inspectRepository } from '../repositories/discoverRepositories';
 import { GitCommandError, type GitRunner } from './GitRunner';
 import { parseCheckoutConflict, type CheckoutConflict } from './checkoutConflicts';
+import { remoteNameProblem, remoteUrlProblem } from '../remotes/remotes';
 
 export interface GitOperationResult {
   message: string;
@@ -103,6 +104,20 @@ export function mergeArguments(operation: Extract<GitOperationRequest, { kind: '
   ];
 }
 
+function validRemoteName(name: string): string {
+  const problem = remoteNameProblem(name);
+  if (problem) throw new Error(`Invalid remote name: ${problem}`);
+  return name.trim();
+}
+
+function validRemoteUrl(url: string): string {
+  const problem = remoteUrlProblem(url);
+  if (problem) throw new Error(`Invalid remote URL: ${problem}`);
+  return url.trim();
+}
+
+const REMOTE_OPERATIONS = new Set<GitOperationRequest['kind']>(['fetch', 'addRemote', 'setRemoteUrl', 'renameRemote', 'removeRemote']);
+
 function validateCommitMessage(value: string, label: string): string {
   if (!value.trim() || value.length > 100_000 || value.includes('\0')) {
     throw new Error(`Invalid ${label}.`);
@@ -162,6 +177,14 @@ export function buildOperationArguments(
         '--delete',
         `refs/heads/${validateToken(operation.branch, 'remote branch')}`,
       ];
+    case 'addRemote':
+      return ['remote', 'add', '--', validRemoteName(operation.name), validRemoteUrl(operation.url)];
+    case 'setRemoteUrl':
+      return ['remote', 'set-url', '--', validRemoteName(operation.name), validRemoteUrl(operation.url)];
+    case 'renameRemote':
+      return ['remote', 'rename', '--', validRemoteName(operation.oldName), validRemoteName(operation.newName)];
+    case 'removeRemote':
+      return ['remote', 'remove', '--', validRemoteName(operation.name)];
     case 'fetch':
       return operation.remote
         ? ['fetch', validateToken(operation.remote, 'remote')]
@@ -392,6 +415,14 @@ export function getOperationConfirmation(
       title: `Delete tag “${operation.name}”?`,
       detail: `Repository “${repository.displayName}” will delete local tag “${operation.name}”.`,
       confirmLabel: 'Delete Tag',
+      destructive: true,
+    };
+  }
+  if (operation.kind === 'removeRemote') {
+    return {
+      title: `Remove remote “${operation.name}”?`,
+      detail: `Repository “${repository.displayName}” will forget remote “${operation.name}” and its remote-tracking branches (${operation.name}/…). Nothing changes on the server; branches that track it lose their upstream.`,
+      confirmLabel: 'Remove Remote',
       destructive: true,
     };
   }
@@ -636,7 +667,8 @@ export class GitOperationService {
         const isRebaseControl = isRebaseControlOperation(operation);
         if (
           freshRepository.operationState &&
-          operation.kind !== 'fetch' &&
+          // Remote settings and fetches do not touch the work in progress.
+          !REMOTE_OPERATIONS.has(operation.kind) &&
           !(freshRepository.operationState in SEQUENCER_COMMANDS && isRebaseControl)
         ) {
           throw new Error(

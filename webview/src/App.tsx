@@ -3143,17 +3143,30 @@ export function App() {
               const collapsed = !refSearchActive && collapsedRefGroups.has(group.kind);
               return (
                 <section className="ref-group" key={group.kind}>
-                  <button
-                    type="button"
-                    className="ref-group-heading"
-                    aria-expanded={!collapsed}
-                    disabled={refSearchActive}
-                    onClick={() => toggleRefGroup(group.kind)}
-                  >
-                    <span aria-hidden="true">{collapsed ? '›' : '⌄'}</span>
-                    <span>{group.label}</span>
-                    <span className="ref-count">{refs.length}</span>
-                  </button>
+                  <div className="ref-group-heading-row">
+                    <button
+                      type="button"
+                      className="ref-group-heading"
+                      aria-expanded={!collapsed}
+                      disabled={refSearchActive}
+                      onClick={() => toggleRefGroup(group.kind)}
+                    >
+                      <span aria-hidden="true">{collapsed ? '›' : '⌄'}</span>
+                      <span>{group.label}</span>
+                      <span className="ref-count">{refs.length}</span>
+                    </button>
+                    {group.kind === 'remote' ? (
+                      <button
+                        type="button"
+                        className="ref-group-action"
+                        aria-label="Manage remotes"
+                        title="Manage Remotes…"
+                        onClick={() => runWorkbenchCommand({ kind: 'manageRemotes' })}
+                      >
+                        <i className="codicon codicon-settings-gear" aria-hidden="true" />
+                      </button>
+                    ) : null}
+                  </div>
                   {!collapsed ? (
                     <RefTreeNodes
                       nodes={tree}

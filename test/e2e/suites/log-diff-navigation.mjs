@@ -1,6 +1,6 @@
 // Log: Changed Files highlights the open file; F7 / Shift+F7 continue into neighbouring files.
 import { join } from 'node:path';
-import { editorState, focusModifiedEditor, frameWith, git, initRepository, runCommand, statusBarText, writeFiles } from '../lib.mjs';
+import { editorState, enlargePanel, focusModifiedEditor, frameWith, git, initRepository, runCommand, statusBarText, writeFiles } from '../lib.mjs';
 
 const lines = (prefix, count) => Array.from({ length: count }, (_, index) => `export const ${prefix}${String(index)} = ${String(index)};`).join('\n') + '\n';
 
@@ -24,13 +24,7 @@ export default {
     const sleep = (ms) => page.waitForTimeout(ms);
     await runCommand(page, 'IDE Git: Open Log');
     await sleep(3000);
-    // Give the bottom panel room so the file list is not clipped.
-    const panel = await page.locator('.part.panel').boundingBox();
-    await page.mouse.move(panel.x + 300, panel.y - 1);
-    await page.mouse.down();
-    await page.mouse.move(panel.x + 300, 330, { steps: 8 });
-    await page.mouse.up();
-    await sleep(800);
+    await enlargePanel(page);
     const log = await frameWith(page, '[aria-label="Commit log"]', 20000);
     await log.locator('[role="row"]').filter({ hasText: 'change three files' }).first().click();
     await sleep(1500);

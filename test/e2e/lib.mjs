@@ -197,6 +197,16 @@ export async function editorState(page) {
   };
 }
 
+/** Drags the bottom panel up so the Git Log has room for its lists. */
+export async function enlargePanel(page) {
+  const panel = await page.locator('.part.panel').boundingBox();
+  await page.mouse.move(panel.x + 300, panel.y - 1);
+  await page.mouse.down();
+  await page.mouse.move(panel.x + 300, 330, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(800);
+}
+
 /** Clicks into the modified (right) side of the active diff editor. */
 export async function focusModifiedEditor(page) {
   const box = await page.locator('.monaco-diff-editor .editor.modified').first().boundingBox();
