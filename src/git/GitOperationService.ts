@@ -87,6 +87,22 @@ function validateStashRef(value: string): string {
   return value;
 }
 
+export function mergeArguments(operation: Extract<GitOperationRequest, { kind: 'merge' }>): string[] {
+  const ref = validateToken(operation.ref, 'merge ref');
+  const mode = operation.mode ?? 'default';
+  const message = operation.message?.trim();
+  // A fast-forward cannot be stopped with --no-commit (git-merge docs), so stopping implies --no-ff.
+  const stop = operation.noCommit === true && (mode === 'default' || mode === 'no-ff');
+  return [
+    'merge',
+    ...(mode === 'no-ff' || stop ? ['--no-ff'] : mode === 'ff-only' ? ['--ff-only'] : mode === 'squash' ? ['--squash'] : []),
+    ...(stop ? ['--no-commit'] : []),
+    // A squash never creates the commit itself, so Git ignores any message.
+    ...(mode !== 'squash' && message ? ['-m', validateCommitMessage(message, 'merge message')] : mode !== 'squash' ? ['--no-edit'] : []),
+    ref,
+  ];
+}
+
 function validateCommitMessage(value: string, label: string): string {
   if (!value.trim() || value.length > 100_000 || value.includes('\0')) {
     throw new Error(`Invalid ${label}.`);
@@ -177,7 +193,7 @@ export function buildOperationArguments(
     case 'revert':
       return ['revert', '--no-edit', validateHash(operation.hash)];
     case 'merge':
-      return ['merge', '--no-edit', validateToken(operation.ref, 'merge ref')];
+      return mergeArguments(operation);
     case 'rebase':
       return ['rebase', validateToken(operation.ref, 'rebase ref')];
     case 'rebaseContinue':

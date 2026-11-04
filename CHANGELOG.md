@@ -2,6 +2,10 @@
 
 All notable changes to IDE Git are documented in this file.
 
+## 0.11.0
+
+- Merge dialog: **Merge…** (next to Merge into Current in the Log's branch and commit menus, in Branches, and as `IDE Git: Merge…`) lists the commits that will come in and lets you choose how: the default, always create a merge commit (`--no-ff`), fast-forward only (`--ff-only`) or squash (`--squash`, then commit it in the Commit window), optionally stopping before the commit, with your own merge message. Merge into Current still merges right away.
+
 ## 0.10.0
 
 - Stashes: each stash shows the branch it was made on and when, next to its message (Git's "On main:" prefix is no longer repeated in the message). Hover for the stash ref and the full date.

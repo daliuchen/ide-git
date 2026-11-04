@@ -1,4 +1,6 @@
 import { randomBytes } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as vscode from 'vscode';
 import { promptCheckoutConflict } from '../git/checkoutConflictPrompt';
@@ -22,6 +24,7 @@ import {
 } from './dialogProtocol';
 
 const COMMIT_FORMAT = '%H%x1f%h%x1f%an%x1f%at%x1f%B%x1e';
+const MERGE_COMMIT_LIMIT = 200;
 
 function parseCommits(output: string): DialogCommit[] {
   return output
@@ -62,6 +65,8 @@ export class GitDialogs implements vscode.Disposable {
     private readonly registry: RepositoryRegistry,
     private readonly diffManager: DiffManager,
     private readonly output: vscode.OutputChannel,
+    /** Opens the Commit window, optionally with a message, e.g. after a squash merge. */
+    private readonly focusCommitPanel?: (message?: string) => Promise<void>,
   ) {}
 
   dispose(): void {
@@ -261,6 +266,79 @@ export class GitDialogs implements vscode.Disposable {
             'Rebasing…',
           );
           panel.dispose();
+          return;
+        }
+        default:
+          return;
+      }
+    });
+  }
+
+  /** The IDE-style Merge dialog: pick how `ref` is merged into the current branch. */
+  async openMerge(repository: RepositorySummary, ref: string): Promise<void> {
+    const cwd = fileURLToPath(repository.rootUri);
+    const run = (args: string[]) => this.runner.run(args, { cwd, timeoutMs: 60_000 });
+    const currentBranch = (await run(['branch', '--show-current'])).stdout.toString('utf8').trim();
+    if (!currentBranch) {
+      void vscode.window.showErrorMessage('Check out a branch before merging into it.');
+      return;
+    }
+    let target: string;
+    try {
+      // Fails for anything that is not a commit, before it reaches the other commands.
+      target = (await run(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])).stdout.toString('utf8').trim();
+    } catch {
+      void vscode.window.showErrorMessage(`“${ref}” is not a branch or commit in ${repository.displayName}.`);
+      return;
+    }
+    const [log, canFastForward] = await Promise.all([
+      run(['log', `--format=${COMMIT_FORMAT}`, `--max-count=${String(MERGE_COMMIT_LIMIT + 1)}`, `HEAD..${target}`, '--']),
+      run(['merge-base', '--is-ancestor', 'HEAD', target]).then(
+        () => true,
+        () => false,
+      ),
+    ]);
+    const commits = parseCommits(log.stdout.toString('utf8'));
+    const shown = /^[0-9a-f]{40,64}$/u.test(ref) ? ref.slice(0, 8) : ref;
+    const init: DialogInit = {
+      dialog: 'merge',
+      repositoryName: repository.displayName,
+      ref: shown,
+      currentBranch,
+      commits: commits.slice(0, MERGE_COMMIT_LIMIT),
+      truncated: commits.length > MERGE_COMMIT_LIMIT,
+      canFastForward,
+      defaultMessage: `Merge ${ref.includes('/') && !ref.startsWith('refs/heads/') ? 'remote-tracking branch' : /^[0-9a-f]{40,64}$/u.test(ref) ? 'commit' : 'branch'} '${shown}' into ${currentBranch}`,
+    };
+    this.open(`Merge ${shown} into ${currentBranch}`, init, async (message, panel, post) => {
+      switch (message.type) {
+        case 'loadFiles':
+          await post({ type: 'filesLoaded', hash: message.hash, files: await this.gitService.getChangedFiles(cwd, message.hash) });
+          return;
+        case 'openFileDiff':
+          await this.openCommitFileDiff(repository, message.hash, message.path);
+          return;
+        case 'merge': {
+          const text = message.message.trim();
+          const done = await this.runOperation(
+            repository,
+            {
+              kind: 'merge',
+              ref,
+              mode: message.mode,
+              ...(message.noCommit ? { noCommit: true } : {}),
+              ...(text ? { message: text } : {}),
+            },
+            `Merging ${shown}…`,
+          );
+          // Close on failure too: a stopped merge continues from the Git Log or the Commit window.
+          panel.dispose();
+          if (done && message.mode === 'squash') {
+            const squashMessage = await readFile(join(fileURLToPath(repository.gitDirUri), 'SQUASH_MSG'), 'utf8').catch(() => '');
+            await this.focusCommitPanel?.(squashMessage.trim() || init.defaultMessage);
+          } else if (done && message.noCommit) {
+            await this.focusCommitPanel?.();
+          }
           return;
         }
         default:

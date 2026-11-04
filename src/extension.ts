@@ -1,4 +1,5 @@
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import * as vscode from 'vscode';
 import { DiffManager } from './diff/DiffManager';
 import { parseRevisionQuery } from './diff/diffModel';
@@ -432,6 +433,7 @@ export function activate(context: vscode.ExtensionContext): void {
     repositories,
     diffManager,
     output,
+    (message) => commitViewProvider.focus(message),
   );
   const resolveRepository = async (resource: unknown): Promise<RepositorySummary | undefined> => {
     let fsPath: string | undefined;
@@ -511,13 +513,38 @@ export function activate(context: vscode.ExtensionContext): void {
     focusCommitPanel: (message?: string) => commitViewProvider.focus(message),
     openRebaseDialog: (target: RepositorySummary, hash: string, mode: 'interactive' | 'reword') =>
       dialogs.openRebase(target, hash, mode),
+    openMergeDialog: (target: RepositorySummary, ref: string) => dialogs.openMerge(target, ref),
   };
   const branchesPopup = new BranchesPopup(
     runner,
     operationService,
     (repository) => dialogs.openPush(repository),
     (repository, ref) => workbenchProvider.showBranchComparison(repository.id, ref),
+    (repository, ref) => dialogs.openMerge(repository, ref),
   );
+  const mergeCommand = vscode.commands.registerCommand('gitLogWorkbench.merge', async (resource?: unknown) => {
+    const repository = await resolveRepository(resource);
+    if (!repository) return;
+    const refs = await runner.run(
+      ['for-each-ref', '--format=%(refname:short)%00%(refname)%00%(HEAD)', 'refs/heads', 'refs/remotes'],
+      { cwd: fileURLToPath(repository.rootUri), timeoutMs: 30_000 },
+    );
+    const items = refs.stdout
+      .toString('utf8')
+      .split('\n')
+      .map((line) => line.split('\0'))
+      .filter(([name, full, head]) => name && full && head !== '*' && !full.endsWith('/HEAD'))
+      .map(([name = '', full = '']) => ({
+        label: name,
+        description: full.startsWith('refs/remotes/') ? 'Remote' : 'Local',
+      }));
+    const picked = await vscode.window.showQuickPick(items, {
+      title: `Merge into the current branch of ${repository.displayName}`,
+      placeHolder: 'Branch to merge',
+      matchOnDescription: true,
+    });
+    if (picked) await dialogs.openMerge(repository, picked.label);
+  });
   const showCommitInLogCommand = vscode.commands.registerCommand(
     'gitLogWorkbench.showCommitInLog',
     async (root?: unknown, hash?: unknown) => {
@@ -704,6 +731,7 @@ export function activate(context: vscode.ExtensionContext): void {
     showCommitInLogCommand,
     dialogs,
     branchesCommand,
+    mergeCommand,
     compareWithLocalCommand,
     pushCommand,
     updateProjectCommand,

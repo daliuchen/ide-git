@@ -1,4 +1,4 @@
-import type { RebaseAction, RebaseStep } from '../protocol/messages';
+import { MERGE_MODES, type MergeMode, type RebaseAction, type RebaseStep } from '../protocol/messages';
 import type { ChangedFile } from '../shared/models';
 
 export interface DialogCommit {
@@ -28,6 +28,20 @@ export type DialogInit =
       repositoryName: string;
       branch?: string;
       commits: DialogCommit[];
+    }
+  | {
+      dialog: 'merge';
+      repositoryName: string;
+      /** What is being merged, as shown (a branch name or a short hash). */
+      ref: string;
+      currentBranch: string;
+      /** Commits in `ref` that the current branch lacks, newest first (capped). */
+      commits: DialogCommit[];
+      /** More commits than listed. */
+      truncated: boolean;
+      /** The current branch can simply move to `ref`, so no merge commit is needed. */
+      canFastForward: boolean;
+      defaultMessage: string;
     };
 
 export type DialogExtensionMessage =
@@ -52,6 +66,7 @@ export type DialogWebviewMessage =
     }
   | { type: 'rebase'; steps: RebaseStep[] }
   | { type: 'reword'; hash: string; message: string }
+  | { type: 'merge'; mode: MergeMode; noCommit: boolean; message: string }
   | { type: 'cancel' };
 
 const ACTIONS: readonly RebaseAction[] = ['pick', 'reword', 'edit', 'squash', 'fixup', 'drop'];
@@ -122,6 +137,12 @@ export function parseDialogMessage(value: unknown): DialogWebviewMessage | undef
     case 'reword':
       return isHash(value.hash) && isText(value.message, 100_000)
         ? { type: 'reword', hash: value.hash, message: value.message }
+        : undefined;
+    case 'merge':
+      return MERGE_MODES.includes(value.mode as MergeMode) &&
+        typeof value.noCommit === 'boolean' &&
+        isText(value.message, 10_000)
+        ? { type: 'merge', mode: value.mode as MergeMode, noCommit: value.noCommit, message: value.message }
         : undefined;
     default:
       return undefined;
