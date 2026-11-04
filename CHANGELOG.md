@@ -2,6 +2,10 @@
 
 All notable changes to IDE Git are documented in this file.
 
+## 0.12.1
+
+- Dialogs (Merge, Push, rebase) in a short editor area no longer draw the commit list over the options below it; the dialog scrolls instead.
+
 ## 0.12.0
 
 - Manage Remotes: list the repository's remotes with their URLs (credentials hidden) and add, edit the URL of, rename, fetch, copy or remove one. Open it with `IDE Git: Manage Remotes…`, the ⚙ next to **Remote** in the Log's branch list, or from Branches. Removing asks first.
