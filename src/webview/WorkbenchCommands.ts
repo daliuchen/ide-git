@@ -15,6 +15,7 @@ export interface WorkbenchCommandHost {
   repositories: RepositoryRegistry;
   focusCommitPanel(message?: string): Promise<void>;
   openRebaseDialog(repository: RepositorySummary, hash: string, mode: 'interactive' | 'reword'): Promise<void>;
+  openMergeDialog(repository: RepositorySummary, ref: string): Promise<void>;
 }
 
 /** Runs Git Log actions that open editors, dialogs, or other views rather than changing the repository. */
@@ -102,6 +103,9 @@ export async function runWorkbenchCommand(
       return;
     case 'openPushDialog':
       await vscode.commands.executeCommand('gitLogWorkbench.push', repository.rootUri, command.source);
+      return;
+    case 'openMergeDialog':
+      await host.openMergeDialog(repository, command.ref);
       return;
     case 'openCommitPanel':
       await host.focusCommitPanel();

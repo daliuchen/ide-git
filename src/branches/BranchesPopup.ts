@@ -17,6 +17,7 @@ export class BranchesPopup {
     private readonly operations: GitOperationService,
     private readonly openPush: (repository: RepositorySummary) => Promise<void>,
     private readonly compareWithCurrent: (repository: RepositorySummary, ref: string) => Promise<void>,
+    private readonly openMerge?: (repository: RepositorySummary, ref: string) => Promise<void>,
   ) {}
 
   async show(repository: RepositorySummary): Promise<void> {
@@ -82,6 +83,7 @@ export class BranchesPopup {
           { label: `Show Diff with Working Tree`, run: () => this.compare(repository, branch.target) },
           { label: `Rebase '${currentName}' onto '${branch.name}'`, run: run({ kind: 'rebase', ref: branch.name }) },
           { label: `Merge '${branch.name}' into '${currentName}'`, run: run({ kind: 'merge', ref: branch.name }) },
+          ...(this.openMerge ? [{ label: `Merge '${branch.name}'…`, description: 'choose how to merge', run: () => this.openMerge?.(repository, branch.name) ?? Promise.resolve() }] : []),
         );
         if (branch.upstream) {
           const slash = branch.upstream.indexOf('/');
@@ -123,6 +125,7 @@ export class BranchesPopup {
         { label: `Show Diff with Working Tree`, run: () => this.compare(repository, branch.target) },
         { label: `Rebase '${currentName}' onto '${branch.name}'`, run: run({ kind: 'rebase', ref: branch.name }) },
         { label: `Merge '${branch.name}' into '${currentName}'`, run: run({ kind: 'merge', ref: branch.name }) },
+          ...(this.openMerge ? [{ label: `Merge '${branch.name}'…`, description: 'choose how to merge', run: () => this.openMerge?.(repository, branch.name) ?? Promise.resolve() }] : []),
         { label: `Pull into '${currentName}' Using Rebase`, run: run({ kind: 'pullFrom', remote, branch: remoteBranch, rebase: true }) },
         { label: `Pull into '${currentName}' Using Merge`, run: run({ kind: 'pullFrom', remote, branch: remoteBranch, rebase: false }) },
         { label: 'Delete', description: 'on the remote', run: run({ kind: 'deleteRemoteBranch', remote, branch: remoteBranch }) },

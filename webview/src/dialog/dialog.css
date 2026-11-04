@@ -226,3 +226,29 @@ body,
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.merge-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.merge-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+
+.merge-modes label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.merge-options .message-editor textarea {
+  min-height: 64px;
+}
+
+.merge-options .message-editor textarea:disabled {
+  opacity: 0.55;
+}

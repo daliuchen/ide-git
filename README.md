@@ -42,6 +42,7 @@ Uninstall the original **Git Log** (`ascenx.git-log`) first if you have it.
 | Reword, squash or reorder | Log → right-click → **Edit Commit Message…** / **Interactively Rebase from Here…** |
 | Rebase onto master | **Fetch**, then right-click `origin/master` → **Rebase Current onto** |
 | See what master has that I don't | Right-click the branch → **Compare with Current**, or **←** / **→** in the **Branch** filter |
+| Merge with options | Right-click a branch → **Merge…**: merge commit, fast-forward only, squash, or stop before committing |
 | Take a commit from another branch | Show that branch → right-click the commit → **Cherry-pick** |
 | Resolve conflicts | Handle them in the Commit window, then **Continue** (or **Skip** / **Abort**) in the banner |
 | See where my branch stands | The status bar on the right shows `main ↑2 ↓1`; click it for Branches |

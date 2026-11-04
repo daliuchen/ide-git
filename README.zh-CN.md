@@ -42,6 +42,7 @@
 | 改旧提交的信息、squash、调整顺序 | Log 里右键 → **Edit Commit Message…** / **Interactively Rebase from Here…** |
 | rebase 到 master | 工具栏 **Fetch**，然后右键 `origin/master` → **Rebase Current onto** |
 | 看 master 有、我没有的提交 | 右键分支 → **Compare with Current**；或在 **Branch** 筛选里点分支旁的 **←** / **→** |
+| 带选项地合并 | 右键分支 → **Merge…**：一定生成合并提交、只允许快进、压成一个提交，或者合并后先不提交 |
 | 把别的分支的提交拿过来 | 查看那个分支 → 右键提交 → **Cherry-pick** |
 | 解决冲突 | Commit 窗口里处理冲突文件，然后点提示条上的 **Continue**（或 **Skip** / **Abort**） |
 | 看当前分支领先/落后多少 | 状态栏右下角显示 `main ↑2 ↓1`，点它打开 Branches |

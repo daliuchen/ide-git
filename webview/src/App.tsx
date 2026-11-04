@@ -3939,6 +3939,22 @@ export function App() {
                   selectedRepository.head === contextMenu.commit.hash
                 }
                 onClick={() =>
+                  runWorkbenchCommand(
+                    { kind: 'openMergeDialog', ref: contextMenu.commit.hash },
+                    contextMenu.repositoryId,
+                  )
+                }
+              >
+                Merge…
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={
+                  !selectedRepository?.currentBranch ||
+                  selectedRepository.head === contextMenu.commit.hash
+                }
+                onClick={() =>
                   runOperation(
                     { kind: 'rebase', ref: contextMenu.commit.hash },
                     contextMenu.repositoryId,
@@ -4437,6 +4453,19 @@ export function App() {
                         }
                       >
                         Merge into Current
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={!selectedRepository?.currentBranch || contextMenu.ref.isCurrent}
+                        onClick={() =>
+                          runWorkbenchCommand(
+                            { kind: 'openMergeDialog', ref: contextMenu.ref.shortName },
+                            contextMenu.repositoryId,
+                          )
+                        }
+                      >
+                        Merge…
                       </button>
                       <button
                         type="button"

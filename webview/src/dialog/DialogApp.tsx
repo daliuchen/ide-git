@@ -5,8 +5,9 @@ import type {
   DialogInit,
   DialogWebviewMessage,
 } from '../../../src/dialogs/dialogProtocol';
-import type { RebaseAction, RebaseStep } from '../../../src/protocol/messages';
+import type { MergeMode, RebaseAction, RebaseStep } from '../../../src/protocol/messages';
 import type { ChangedFile } from '../../../src/shared/models';
+import { mergeCreatesCommit } from './mergeOptions';
 
 interface DialogVsCodeApi {
   postMessage(message: DialogWebviewMessage): void;
@@ -454,6 +455,129 @@ function RebaseDialog({ init, busy, error, files, requestFiles }: {
   );
 }
 
+const MERGE_MODES: { mode: MergeMode; label: string; detail: string }[] = [
+  { mode: 'default', label: 'Default', detail: 'Fast-forward when possible, otherwise create a merge commit' },
+  { mode: 'no-ff', label: 'Create a merge commit', detail: 'git merge --no-ff' },
+  { mode: 'ff-only', label: 'Fast-forward only', detail: 'git merge --ff-only: fail if the branches have diverged' },
+  { mode: 'squash', label: 'Squash', detail: 'git merge --squash: stage the changes and commit them yourself' },
+];
+
+function MergeDialog({ init, busy, error, files, requestFiles }: {
+  init: Extract<DialogInit, { dialog: 'merge' }>;
+  busy: boolean;
+  error?: string;
+  files: Map<string, ChangedFile[]>;
+  requestFiles(hash: string): void;
+}) {
+  const [mode, setMode] = useState<MergeMode>('default');
+  const [noCommit, setNoCommit] = useState(false);
+  const [message, setMessage] = useState('');
+  const [selected, setSelected] = useState(init.commits[0]?.hash);
+  useEffect(() => {
+    if (selected) requestFiles(selected);
+  }, [selected, requestFiles]);
+  const upToDate = init.commits.length === 0;
+  const stopAllowed = mode === 'default' || mode === 'no-ff';
+  const createsCommit = mergeCreatesCommit(mode, noCommit && stopAllowed, init.canFastForward);
+  const note =
+    mode === 'squash'
+      ? 'The changes are staged; review and commit them in the Commit window.'
+      : noCommit && stopAllowed
+        ? 'Git stops before committing; review the result and commit it in the Commit window.'
+        : !createsCommit
+          ? `'${init.currentBranch}' only moves forward to '${init.ref}'; no merge commit is created.`
+          : undefined;
+  const merge = () => {
+    if (busy || upToDate) return;
+    post({ type: 'merge', mode, noCommit: noCommit && stopAllowed, message: createsCommit ? message : '' });
+  };
+  return (
+    <form
+      className="dialog"
+      onSubmit={(event) => {
+        event.preventDefault();
+        merge();
+      }}
+    >
+      <header className="dialog-header">
+        <i className="codicon codicon-git-merge" />
+        <strong>
+          Merge {init.ref} into {init.currentBranch}
+        </strong>
+        <span className="detail">{init.repositoryName}</span>
+      </header>
+      <div className="dialog-body split">
+        <div className="pane">
+          <div className="pane-title">
+            {upToDate
+              ? 'Already up to date'
+              : `${init.truncated ? 'More than ' : ''}${String(init.commits.length)} commit${init.commits.length === 1 ? '' : 's'} to merge`}
+          </div>
+          <div className="commit-list" role="listbox" aria-label="Commits to merge">
+            {upToDate ? <div className="empty">{`'${init.currentBranch}' already contains every commit of '${init.ref}'.`}</div> : null}
+            {init.commits.map((commit) => (
+              <div
+                key={commit.hash}
+                role="option"
+                aria-selected={commit.hash === selected}
+                className={`commit-row${commit.hash === selected ? ' selected' : ''}`}
+                title={commit.message}
+                onClick={() => setSelected(commit.hash)}
+              >
+                <span className="subject">{commit.subject}</span>
+                <span className="detail">{commit.author}</span>
+                <span className="detail">{formatDate(commit.date)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="pane">
+          <div className="pane-title">Changed files</div>
+          <FileList {...(selected ? { hash: selected } : {})} {...(selected && files.get(selected) ? { files: files.get(selected) as ChangedFile[] } : {})} />
+        </div>
+      </div>
+      <div className="merge-options">
+        <div role="radiogroup" aria-label="Merge mode" className="merge-modes">
+          {MERGE_MODES.map((option) => (
+            <label key={option.mode} title={option.detail}>
+              <input type="radio" name="merge-mode" checked={mode === option.mode} onChange={() => setMode(option.mode)} />
+              {option.label}
+            </label>
+          ))}
+          <label title="git merge --no-commit --no-ff">
+            <input type="checkbox" checked={noCommit && stopAllowed} disabled={!stopAllowed} onChange={(event) => setNoCommit(event.target.checked)} />
+            Don't commit
+          </label>
+        </div>
+        <div className="message-editor">
+          <textarea
+            aria-label="Merge message"
+            value={message}
+            placeholder={init.defaultMessage}
+            disabled={!createsCommit}
+            spellCheck={false}
+            onChange={(event) => setMessage(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && (isMac ? event.metaKey : event.ctrlKey)) merge();
+            }}
+          />
+          {note ? <span className="detail">{note}</span> : null}
+        </div>
+      </div>
+      {error ? <div className="error-banner">{error}</div> : null}
+      <footer className="dialog-footer">
+        <span className="spacer" />
+        <button type="button" onClick={() => post({ type: 'cancel' })}>
+          Cancel
+        </button>
+        <button type="submit" className="primary" disabled={busy || upToDate} title={`${isMac ? '⌘' : 'Ctrl+'}Enter`}>
+          Merge
+        </button>
+      </footer>
+    </form>
+  );
+}
+
 export function DialogApp() {
   const [init, setInit] = useState<DialogInit>();
   const [busy, setBusy] = useState(false);
@@ -476,6 +600,9 @@ export function DialogApp() {
   }, [receiveFiles]);
 
   if (!init) return <div className="empty">Loading…</div>;
+  if (init.dialog === 'merge') {
+    return <MergeDialog init={init} busy={busy} {...(error ? { error } : {})} files={files} requestFiles={requestFiles} />;
+  }
   return init.dialog === 'push' ? (
     <PushDialog
       init={init}

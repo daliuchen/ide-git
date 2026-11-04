@@ -171,7 +171,16 @@ export type GitOperationRequest =
   | { kind: 'pushHead'; remote: string; branch: string }
   | { kind: 'cherryPick'; hash: string }
   | { kind: 'revert'; hash: string }
-  | { kind: 'merge'; ref: string }
+  | {
+      kind: 'merge';
+      ref: string;
+      /** Omitted: fast-forward when possible, otherwise a merge commit with Git's default message. */
+      mode?: MergeMode;
+      /** Stop before committing the merge (`--no-commit`). */
+      noCommit?: boolean;
+      /** Message for the merge commit, when one is created. */
+      message?: string;
+    }
   | { kind: 'rebase'; ref: string }
   | { kind: 'rebaseContinue' }
   | { kind: 'rebaseSkip' }
@@ -216,6 +225,9 @@ export interface RebaseStep {
   message?: string;
 }
 
+export type MergeMode = 'default' | 'no-ff' | 'ff-only' | 'squash';
+export const MERGE_MODES: readonly MergeMode[] = ['default', 'no-ff', 'ff-only', 'squash'];
+
 /** Editor-side actions requested from the Git Log that do not change repository state directly. */
 export type WorkbenchCommand =
   | { kind: 'compareWithLocal'; hash: string; path?: string; status?: ChangedFile['status'] }
@@ -225,6 +237,7 @@ export type WorkbenchCommand =
   | { kind: 'prepareFixup'; hash: string; squash: boolean }
   | { kind: 'openRebaseDialog'; hash: string; mode: 'interactive' | 'reword' }
   | { kind: 'openPushDialog'; source?: string }
+  | { kind: 'openMergeDialog'; ref: string }
   | { kind: 'openCommitPanel' };
 
 export type ErrorRecoveryAction = { kind: 'forceDeleteBranch'; branch: string };
@@ -650,6 +663,8 @@ function isWorkbenchCommand(value: unknown): value is WorkbenchCommand {
       return isHash(value.hash) && (value.mode === 'interactive' || value.mode === 'reword');
     case 'openPushDialog':
       return value.source === undefined || isHash(value.source);
+    case 'openMergeDialog':
+      return isSafeGitToken(value.ref);
     case 'openCommitPanel':
       return true;
     default:
@@ -693,6 +708,13 @@ function isGitOperationRequest(value: unknown): value is GitOperationRequest {
     case 'revert':
       return isHash(value.hash);
     case 'merge':
+      return (
+        isSafeGitToken(value.ref) &&
+        (value.mode === undefined || MERGE_MODES.includes(value.mode as MergeMode)) &&
+        (value.noCommit === undefined || typeof value.noCommit === 'boolean') &&
+        (value.message === undefined ||
+          (typeof value.message === 'string' && value.message.length <= 10_000 && !value.message.includes('\0')))
+      );
     case 'rebase':
       return isSafeGitToken(value.ref);
     case 'rebaseContinue':
