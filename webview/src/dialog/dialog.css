@@ -8,6 +8,8 @@ body,
   display: flex;
   flex-direction: column;
   height: 100%;
+  /* In a short editor the dialog scrolls instead of letting its parts overlap. */
+  overflow: auto;
   max-width: 1200px;
   margin: 0 auto;
   padding: 12px 16px;
@@ -84,7 +86,8 @@ body,
   display: grid;
   grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   gap: 12px;
-  min-height: 0;
+  /* Room for a pane title and the lists' own minimum height. */
+  min-height: 112px;
 }
 
 .pane {
