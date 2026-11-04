@@ -98,11 +98,7 @@ export class GitDialogs implements vscode.Disposable {
       validateInput: (value) => (/^[A-Za-z0-9][A-Za-z0-9._/-]*$/u.test(value.trim()) ? undefined : 'Not a valid remote name.'),
     });
     if (!name) return false;
-    await this.runner.run(['remote', 'add', name.trim(), url.trim()], {
-      cwd: fileURLToPath(repository.rootUri),
-      timeoutMs: 30_000,
-    });
-    return true;
+    return this.runOperation(repository, { kind: 'addRemote', name: name.trim(), url: url.trim() }, 'Adding remote…');
   }
 
   async openPush(repository: RepositorySummary, source = 'HEAD'): Promise<void> {

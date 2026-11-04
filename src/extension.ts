@@ -43,6 +43,7 @@ import { LineBlameService } from './git/LineBlameService';
 import { registerExtension } from './registerExtension';
 import { RepositoryRegistry } from './repositories/RepositoryRegistry';
 import { BranchStatusBar } from './statusBar/BranchStatusBar';
+import { RemotesManager } from './remotes/RemotesManager';
 import { WorkbenchViewProvider } from './webview/WorkbenchPanel';
 import { CommitViewProvider } from './commit/CommitViewProvider';
 import { BranchesPopup } from './branches/BranchesPopup';
@@ -571,6 +572,11 @@ export function activate(context: vscode.ExtensionContext): void {
       await workbenchProvider.revealCommit(repository, target.hash);
     },
   );
+  const remotesManager = new RemotesManager(runner, operationService);
+  const manageRemotesCommand = vscode.commands.registerCommand('gitLogWorkbench.manageRemotes', async (resource?: unknown) => {
+    const repository = await resolveRepository(resource);
+    if (repository) await remotesManager.show(repository);
+  });
   const branchesCommand = vscode.commands.registerCommand('gitLogWorkbench.branches', async (resource?: unknown) => {
     const repository = await resolveRepository(resource);
     if (repository) await branchesPopup.show(repository);
@@ -732,6 +738,7 @@ export function activate(context: vscode.ExtensionContext): void {
     dialogs,
     branchesCommand,
     mergeCommand,
+    manageRemotesCommand,
     compareWithLocalCommand,
     pushCommand,
     updateProjectCommand,

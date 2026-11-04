@@ -166,6 +166,10 @@ export type GitOperationRequest =
   | { kind: 'checkoutRemote'; name: string; startPoint: string }
   | { kind: 'deleteRemoteBranch'; remote: string; branch: string }
   | { kind: 'fetch'; remote?: string }
+  | { kind: 'addRemote'; name: string; url: string }
+  | { kind: 'setRemoteUrl'; name: string; url: string }
+  | { kind: 'renameRemote'; oldName: string; newName: string }
+  | { kind: 'removeRemote'; name: string }
   | { kind: 'pull' }
   | { kind: 'push'; forceWithLease?: boolean; remote?: string; targetRef?: string }
   | { kind: 'pushHead'; remote: string; branch: string }
@@ -238,6 +242,7 @@ export type WorkbenchCommand =
   | { kind: 'openRebaseDialog'; hash: string; mode: 'interactive' | 'reword' }
   | { kind: 'openPushDialog'; source?: string }
   | { kind: 'openMergeDialog'; ref: string }
+  | { kind: 'manageRemotes' }
   | { kind: 'openCommitPanel' };
 
 export type ErrorRecoveryAction = { kind: 'forceDeleteBranch'; branch: string };
@@ -666,6 +671,7 @@ function isWorkbenchCommand(value: unknown): value is WorkbenchCommand {
     case 'openMergeDialog':
       return isSafeGitToken(value.ref);
     case 'openCommitPanel':
+    case 'manageRemotes':
       return true;
     default:
       return false;

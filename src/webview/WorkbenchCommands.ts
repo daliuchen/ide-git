@@ -110,5 +110,8 @@ export async function runWorkbenchCommand(
     case 'openCommitPanel':
       await host.focusCommitPanel();
       return;
+    case 'manageRemotes':
+      await vscode.commands.executeCommand('gitLogWorkbench.manageRemotes', repository.rootUri);
+      return;
   }
 }

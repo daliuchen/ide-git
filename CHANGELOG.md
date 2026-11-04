@@ -2,6 +2,10 @@
 
 All notable changes to IDE Git are documented in this file.
 
+## 0.12.0
+
+- Manage Remotes: list the repository's remotes with their URLs (credentials hidden) and add, edit the URL of, rename, fetch, copy or remove one. Open it with `IDE Git: Manage Remotes…`, the ⚙ next to **Remote** in the Log's branch list, or from Branches. Removing asks first.
+
 ## 0.11.0
 
 - Merge dialog: **Merge…** (next to Merge into Current in the Log's branch and commit menus, in Branches, and as `IDE Git: Merge…`) lists the commits that will come in and lets you choose how: the default, always create a merge commit (`--no-ff`), fast-forward only (`--ff-only`) or squash (`--squash`, then commit it in the Commit window), optionally stopping before the commit, with your own merge message. Merge into Current still merges right away.

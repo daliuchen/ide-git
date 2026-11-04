@@ -670,6 +670,36 @@ select:focus-visible,
   background: var(--vscode-list-hoverBackground);
 }
 
+.ref-group-heading-row {
+  display: flex;
+  align-items: center;
+}
+
+.ref-group-heading-row > .ref-group-heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.ref-group-action {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  margin-right: 4px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+}
+
+.ref-group-action:hover {
+  background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground));
+  color: var(--vscode-foreground);
+}
+
 .ref-group-heading:disabled,
 .ref-folder-row:disabled {
   color: inherit;
