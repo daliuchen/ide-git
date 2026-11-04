@@ -430,6 +430,7 @@
     "test:integration": "pnpm run build && node ./scripts/run-integration.mjs",
     "test:performance": "vitest run test/performance",
     "test:e2e": "pnpm run build && node test/e2e/run.mjs",
+    "docs:screenshots": "pnpm run build && node test/e2e/readme-screenshots.mjs",
     "package": "pnpm run clean && pnpm run build && vsce package --no-dependencies --baseContentUrl https://github.com/daliuchen/ide-git/blob/main --baseImagesUrl https://raw.githubusercontent.com/daliuchen/ide-git/main"
   },
   "dependencies": {

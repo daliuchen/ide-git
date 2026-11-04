@@ -9,7 +9,7 @@
   &nbsp;English | <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-![Commit window](images/c1-commit-window.jpg)
+![Commit window: one chunk of cart.ts and a new file selected](images/commit-window.jpg)
 
 ## What it solves
 
@@ -55,15 +55,27 @@ Uninstall the original **Git Log** (`ascenx.git-log`) first if you have it.
 
 ## Screenshots
 
-![Line-level selection](images/n3-lines-and-options.jpg)
+Commit single lines of a chunk:
 
-![Another branch in the Log](images/log-branch-marks.jpg)
+![Line-level selection](images/commit-lines.jpg)
 
-![Editable diff](images/c5-diff-lsp.jpg)
+Another branch in the Log: bold commits are missing from the current branch, dimmed ones are there, **picked** ones were cherry-picked. The status bar shows the current branch against its upstream:
 
-![Interactive rebase](images/c18-rebase-dialog.jpg)
+![Another branch in the Log](images/log-branch.jpg)
 
-![Push dialog](images/c13-push-dialog.jpg)
+A diff opened from the Log: the open file is highlighted in Changed Files, and F7 at the last change offers the next file:
+
+![Diff with F7 to the next file](images/log-diff.jpg)
+
+![Merge dialog](images/merge-dialog.jpg)
+
+![Interactive rebase](images/rebase-dialog.jpg)
+
+![Push dialog](images/push-dialog.jpg)
+
+Annotate, with the hover to jump to the commit or to the line's previous version:
+
+![Annotate](images/annotate.jpg)
 
 ## Open the Commit window with ⌘9
 
