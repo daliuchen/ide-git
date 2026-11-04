@@ -9,7 +9,7 @@
   &nbsp;<a href="README.md">English</a> | 简体中文
 </p>
 
-![Commit 窗口](images/c1-commit-window.jpg)
+![Commit 窗口：只选了 cart.ts 的一个改动块和一个新文件](images/commit-window.jpg)
 
 ## 它解决什么问题
 
@@ -55,15 +55,27 @@
 
 ## 截图
 
-![按块、按行提交](images/n3-lines-and-options.jpg)
+只提交改动块里的某几行：
 
-![查看其他分支](images/log-branch-marks.jpg)
+![按行提交](images/commit-lines.jpg)
 
-![可编辑的 Diff](images/c5-diff-lsp.jpg)
+在 Log 里查看其他分支：粗体是当前分支没有的提交，变灰的是已经有的，标 **picked** 的是被 cherry-pick 过的。状态栏显示当前分支和上游的差距：
 
-![交互式 Rebase](images/c18-rebase-dialog.jpg)
+![查看其他分支](images/log-branch.jpg)
 
-![Push 对话框](images/c13-push-dialog.jpg)
+从 Log 打开的 Diff：Changed Files 里高亮正在看的文件，F7 到最后一处改动时提示下一个文件：
+
+![Diff 和 F7 跨文件](images/log-diff.jpg)
+
+![Merge 对话框](images/merge-dialog.jpg)
+
+![交互式 Rebase](images/rebase-dialog.jpg)
+
+![Push 对话框](images/push-dialog.jpg)
+
+Annotate 和悬停卡片：跳到对应提交，或者看这一行之前的版本：
+
+![Annotate](images/annotate.jpg)
 
 ## 用 ⌘9 打开 Commit 窗口
 

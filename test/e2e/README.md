@@ -18,6 +18,11 @@ node test/e2e/run.mjs status-bar       # one or more suites by name (after pnpm 
 - Written for macOS (⌘ shortcuts, `/tmp` scratch directories because socket paths are limited to
   104 characters). They are not run in CI.
 
+## README screenshots
+
+`pnpm run docs:screenshots` rebuilds a small demo project and recaptures every image in `images/`
+(1400 px wide JPEG). Run it after UI changes and check the pictures before committing.
+
 ## Writing a suite
 
 Export `{ setup(directory), run({ page, check, workspace, shot }), launch? }` from
