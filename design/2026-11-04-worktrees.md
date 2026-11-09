@@ -103,6 +103,7 @@ Manage Worktrees — ide-git
 
 - **默认操作改成 Switch to This Worktree**：方案确认时用户追加，上面已写进方案。
 - **Log 里的位置**：第一版放在分支列表最底下（Tags 后面），用户觉得不好找，试过改成工具栏 Paths 旁边的 Worktree 下拉；但下拉里单击就切换整个窗口，太容易误操作，最后回到分支列表里的分组，挪到 Tags 上面，单击只选中分支、双击才切换。
+- **回到当前 worktree（用户追加）**：单击别的 worktree 看完它的提交后要回来，原来得再点绿色那行。Branch 筛选的清除按钮本来就会回到 HEAD（也就是这个 worktree 的分支），只是看起来像「清除」；有分支筛选时它改为 `↩`，提示「Back to <当前分支> (this worktree)」，不另加按钮。
 - **删除后 Log 不刷新（试用时发现）**：Git 删除 worktree 是整个删掉 `.git/worktrees/<名>/`，里面文件的删除事件不一定报上来，Log 一直显示已删的那行。修法：监听再加 `worktrees/*` 目录本身；Manage Worktrees 每次新建、删除、清理成功后直接通知 Log 刷新（`WorkbenchViewProvider.notifyRepositoryChanged`），不只靠监听。e2e 加了「删除后 Log 里消失」这一项。
 - **分支占用不靠 `%(worktreepath)`**：Log 和 Branches 都直接用 `git worktree list --porcelain` 的结果（Log 每次完整加载时随 `repositoryData.worktrees` 一起发），一个来源，不用改 `parseRefs` 的字段。
 - **Checkout 被占用的分支**：不在 checkout 前预先查询，而是在 Git 报 `is already used by worktree at` / `is already checked out at`（两种版本的措辞）时交给 `GitOperationRunOptions.resolveBranchInOtherWorktree`，弹框 Switch to Worktree / Open in New Window。Log 和 Branches 里被占用的分支本来就不显示 Checkout，改为 **Switch to Its Worktree**。
@@ -110,4 +111,4 @@ Manage Worktrees — ide-git
 - **自动刷新**：监听公共 git 目录的 `worktrees/*` 和 `worktrees/*/HEAD`（新建、删除、别的 worktree 切分支），在终端里建的 worktree 也会出现在 Log 里。
 - **新建后的通知按钮用短文字**（Switch / New Window / Add to Workspace），长文字在通知里会被截断。
 - 目录不存在但 Git 版本太旧不报 `prunable` 时，Manage Worktrees 自己检查目录是否存在。
-- 验证：单测（解析、路径、错误识别、协议校验、Log 分组的双击/右键/分支标记）；真实临时仓库（从本地/新/远程分支建，路径带空格和中文；被占用分支 checkout 交给回调；干净的直接删、有改动的第一次被拒、force 成功、分支保留；不确认不删；prune；非法输入在执行前拒绝；rebase 进行中能建）；e2e `worktrees` 12 项（命令面板新建 → 分组在 Tags 上面、单击不切窗口、分支标记 → 分支右键菜单 → 确认后删除、Log 里随即消失 → 终端新建的出现 → 双击把窗口切过去）。
+- 验证：单测（解析、路径、错误识别、协议校验、Log 分组的双击/右键/分支标记）；真实临时仓库（从本地/新/远程分支建，路径带空格和中文；被占用分支 checkout 交给回调；干净的直接删、有改动的第一次被拒、force 成功、分支保留；不确认不删；prune；非法输入在执行前拒绝；rebase 进行中能建）；e2e `worktrees` 14 项（命令面板新建 → 分组在 Tags 上面、单击不切窗口、↩ 回到当前分支、分支标记 → 分支右键菜单 → 确认后删除、Log 里随即消失 → 终端新建的出现 → 双击把窗口切过去）。

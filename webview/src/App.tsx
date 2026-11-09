@@ -2421,14 +2421,19 @@ export function App() {
               <button
                 type="button"
                 className="filter-chip-action"
-                aria-label={`Clear ${filter.name.toLowerCase()} filter`}
-                title={`Clear ${filter.name.toLowerCase()} filter`}
+                // Without a branch filter the Log shows HEAD, so clearing it goes back to this worktree's branch.
+                aria-label={filter.kind === 'branch' ? 'Back to current branch' : `Clear ${filter.name.toLowerCase()} filter`}
+                title={
+                  filter.kind === 'branch'
+                    ? `Back to ${currentBranchLabel} (this worktree)`
+                    : `Clear ${filter.name.toLowerCase()} filter`
+                }
                 onClick={() => {
                   applyFilters(filter.clear(state.filters));
                   if (filterPopup === filter.kind) setFilterPopup(undefined);
                 }}
               >
-                ×
+                {filter.kind === 'branch' ? '↩' : '×'}
               </button>
             ) : null}
           </span>

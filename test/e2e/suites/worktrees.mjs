@@ -67,6 +67,11 @@ export default {
     await section.locator('.worktree-item', { hasText: 'feat/x' }).click();
     await sleep(1500);
     check('a single click keeps this window', (await page.title()).includes('repo') && !(await page.title()).includes('repo-feat-x'));
+    const back = log.getByRole('button', { name: 'Back to current branch' });
+    check('the Log shows feat/x, with a way back', (await back.count()) === 1 && (await back.getAttribute('title')) === 'Back to main (this worktree)');
+    await back.click();
+    await sleep(1500);
+    check('↩ goes back to this worktree’s branch', (await back.count()) === 0);
     check('feat/x is marked as being in another worktree', (await log.locator('[title^="refs/heads/feat/x — checked out in"]').count()) === 1);
     await shot('log');
     await log.locator('[title^="refs/heads/feat/x"]').first().click({ button: 'right' });
