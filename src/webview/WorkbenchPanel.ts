@@ -20,7 +20,7 @@ import type { RepositoryRegistry } from '../repositories/RepositoryRegistry';
 import { RepositoryWatchManager } from '../repositories/RepositoryWatchManager';
 import type { EditorHistoryRequest, FolderHistoryRequest, RepositorySummary } from '../shared/models';
 import { createWebviewHtml } from './createWebviewHtml';
-import { promptCheckoutConflict } from '../git/checkoutConflictPrompt';
+import { promptBranchInOtherWorktree, promptCheckoutConflict } from '../git/checkoutConflictPrompt';
 import { loadWebview } from './loadWebview';
 import { WorkbenchController } from './WorkbenchController';
 
@@ -182,6 +182,7 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
         return selected === confirmation.confirmLabel;
       },
       resolveCheckoutConflict: promptCheckoutConflict,
+      resolveBranchInOtherWorktree: promptBranchInOtherWorktree,
       showInformation: (message) => {
         void vscode.window.showInformationMessage(message);
       },
@@ -288,6 +289,11 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
     this.pendingHistoryRequest = { kind: 'compare', repositoryId, ref };
     await vscode.commands.executeCommand('gitLogWorkbench.log.focus');
     await this.flushPendingHistory();
+  }
+
+  /** Reloads the Log after a change its file watchers may miss (a deleted worktree folder). */
+  async notifyRepositoryChanged(repositoryId: string): Promise<void> {
+    await this.session?.controller.notifyRepositoryChanged(repositoryId);
   }
 
   dispose(): void {

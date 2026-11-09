@@ -2997,7 +2997,7 @@ describe('WorkbenchApp', () => {
       expect.objectContaining({ type: 'runOperation', operation: { kind: 'rebase', ref: 'origin/release' } }),
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Clear branch filter' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to current branch' }));
     const cleared = postedMessages.at(-1) as { filters: { compare?: unknown; branches: string[] } };
     expect(cleared.filters.compare).toBeUndefined();
     expect(cleared.filters.branches).toEqual([]);

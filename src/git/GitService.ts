@@ -7,8 +7,10 @@ import { parseCommitDetails } from './parsers/parseCommitDetails';
 import { applyNumstat, parseNameStatus } from './parsers/parseChangedFiles';
 import { parseLog, parseSearchableLog } from './parsers/parseLog';
 import { parseRefs } from './parsers/parseRefs';
+import { parseWorktreeList } from '../worktrees/worktrees';
 import type { LogFilters } from '../protocol/messages';
 import type {
+  WorktreeInfo,
   ChangedFile,
   CommitDetails,
   CommitSummary,
@@ -668,6 +670,21 @@ export class GitService {
       .split(/\r?\n/u)
       .filter(Boolean);
     return parseRefs(result.stdout, currentBranch, remoteNames);
+  }
+
+  /** The repository's worktrees; empty when Git cannot list them. */
+  async getWorktrees(cwd: string, signal?: AbortSignal): Promise<WorktreeInfo[]> {
+    try {
+      const result = await this.runner.run(['worktree', 'list', '--porcelain'], {
+        cwd,
+        ...(signal ? { signal } : {}),
+        timeoutMs: 30_000,
+      });
+      return parseWorktreeList(result.stdout.toString('utf8'), cwd);
+    } catch (error) {
+      if (error instanceof GitCommandError && !error.cancelled) return [];
+      throw error;
+    }
   }
 
   async getLog(cwd: string, query: LogQuery): Promise<CommitSummary[]> {

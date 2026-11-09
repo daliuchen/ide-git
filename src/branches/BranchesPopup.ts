@@ -1,11 +1,13 @@
 import { fileURLToPath } from 'node:url';
 import * as vscode from 'vscode';
-import { promptCheckoutConflict } from '../git/checkoutConflictPrompt';
+import { promptBranchInOtherWorktree, promptCheckoutConflict } from '../git/checkoutConflictPrompt';
 import { classifyGitError } from '../git/classifyGitError';
 import type { GitOperationService } from '../git/GitOperationService';
 import { GitCommandError, type GitRunner } from '../git/GitRunner';
 import type { GitOperationRequest } from '../protocol/messages';
-import type { RepositorySummary } from '../shared/models';
+import type { RepositorySummary, WorktreeInfo } from '../shared/models';
+import { openWorktree } from '../worktrees/openWorktree';
+import { parseWorktreeList } from '../worktrees/worktrees';
 import { parseBranchRefs, type BranchRef } from './branchRefs';
 
 type Action = vscode.QuickPickItem & { run?: () => Promise<void> };
@@ -34,18 +36,32 @@ export class BranchesPopup {
     );
     const branches = parseBranchRefs(result.stdout.toString('utf8'));
     const current = branches.find((branch) => branch.current);
-    const toItem = (branch: BranchRef): Action & { branch: BranchRef } => ({
-      label: `${branch.current ? '$(check)' : branch.kind === 'local' ? '$(git-branch)' : '$(cloud)'} ${branch.name}`,
-      description: [branch.track ? `${branch.track.replace('ahead ', '↑').replace('behind ', '↓')}` : '', branch.upstream ? `→ ${branch.upstream}` : '']
-        .filter(Boolean)
-        .join('  '),
-      branch,
-    });
+    const elsewhere = await this.branchesInOtherWorktrees(cwd);
+    const toItem = (branch: BranchRef): Action & { branch: BranchRef } => {
+      const worktree = branch.kind === 'local' ? elsewhere.get(branch.name) : undefined;
+      return {
+        label: `${branch.current ? '$(check)' : worktree ? '$(folder-library)' : branch.kind === 'local' ? '$(git-branch)' : '$(cloud)'} ${branch.name}`,
+        description: [
+          branch.track ? `${branch.track.replace('ahead ', '↑').replace('behind ', '↓')}` : '',
+          branch.upstream ? `→ ${branch.upstream}` : '',
+          worktree ? `in ${worktree.displayPath}` : '',
+        ]
+          .filter(Boolean)
+          .join('  '),
+        branch,
+      };
+    };
     const items: (Action & { branch?: BranchRef })[] = [
       { label: '$(add) New Branch…', run: () => this.newBranch(repository, 'HEAD') },
       { label: '$(git-commit) Checkout Tag or Revision…', run: () => this.checkoutRevision(repository) },
       { label: '$(repo-pull) Update Project…', run: async () => { await vscode.commands.executeCommand('gitLogWorkbench.updateProject', repository.rootUri); } },
       { label: '$(repo-push) Push…', run: () => this.openPush(repository) },
+      {
+        label: '$(list-tree) Manage Worktrees…',
+        run: async () => {
+          await vscode.commands.executeCommand('gitLogWorkbench.manageWorktrees', repository.rootUri);
+        },
+      },
       {
         label: '$(remote) Manage Remotes…',
         run: async () => {
@@ -66,21 +82,53 @@ export class BranchesPopup {
       await picked.run();
       return;
     }
-    if (picked.branch) await this.showBranchActions(repository, picked.branch, current);
+    if (picked.branch) {
+      await this.showBranchActions(repository, picked.branch, current, elsewhere.get(picked.branch.name));
+    }
   }
 
-  private async showBranchActions(repository: RepositorySummary, branch: BranchRef, current?: BranchRef): Promise<void> {
+  /** Local branches checked out in a worktree other than this one, by name. */
+  private async branchesInOtherWorktrees(cwd: string): Promise<Map<string, WorktreeInfo>> {
+    try {
+      const result = await this.runner.run(['worktree', 'list', '--porcelain'], { cwd, timeoutMs: 30_000 });
+      return new Map(
+        parseWorktreeList(result.stdout.toString('utf8'), cwd)
+          .filter((worktree) => worktree.branch && !worktree.isCurrent && !worktree.prunable)
+          .map((worktree) => [worktree.branch ?? '', worktree]),
+      );
+    } catch {
+      return new Map();
+    }
+  }
+
+  private async showBranchActions(
+    repository: RepositorySummary,
+    branch: BranchRef,
+    current?: BranchRef,
+    worktree?: WorktreeInfo,
+  ): Promise<void> {
     const run = (operation: GitOperationRequest) => () => this.run(repository, operation);
     const currentName = current?.name ?? 'HEAD';
     const actions: Action[] = [];
+    const newWorktree: Action = {
+      label: `New Worktree from '${branch.name}'…`,
+      run: async () => {
+        await vscode.commands.executeCommand('gitLogWorkbench.newWorktree', repository.rootUri, branch.name);
+      },
+    };
     if (branch.kind === 'local') {
-      if (!branch.current) {
+      if (worktree) {
+        actions.push(
+          { label: '$(arrow-swap) Switch to Worktree', description: worktree.displayPath, run: () => openWorktree(worktree.path, 'switch') },
+          { label: '$(empty-window) Open Worktree in New Window', run: () => openWorktree(worktree.path, 'newWindow') },
+        );
+      } else if (!branch.current) {
         actions.push({ label: 'Checkout', run: run({ kind: 'checkout', ref: branch.name }) });
       }
-      actions.push({ label: `New Branch from '${branch.name}'…`, run: () => this.newBranch(repository, branch.name) });
+      actions.push({ label: `New Branch from '${branch.name}'…`, run: () => this.newBranch(repository, branch.name) }, newWorktree);
       if (!branch.current) {
         actions.push(
-          { label: `Checkout and Rebase onto '${currentName}'`, run: run({ kind: 'checkoutAndRebase', branch: branch.name }) },
+          ...(worktree ? [] : [{ label: `Checkout and Rebase onto '${currentName}'`, run: run({ kind: 'checkoutAndRebase', branch: branch.name }) }]),
           {
             label: `Compare with '${currentName}'`,
             description: `commits in '${branch.name}' missing from '${currentName}'`,
@@ -110,7 +158,7 @@ export class BranchesPopup {
         actions.push({ label: 'Push…', run: () => this.openPush(repository) });
       }
       actions.push({ label: 'Rename…', run: () => this.rename(repository, branch.name) });
-      if (!branch.current) {
+      if (!branch.current && !worktree) {
         actions.push({ label: 'Delete', run: run({ kind: 'deleteBranch', name: branch.name, force: false }) });
       }
     } else {
@@ -123,6 +171,7 @@ export class BranchesPopup {
           run: run({ kind: 'checkoutRemote', name: remoteBranch, startPoint: branch.name }),
         },
         { label: `New Branch from '${branch.name}'…`, run: () => this.newBranch(repository, branch.name) },
+        newWorktree,
         {
           label: `Compare with '${currentName}'`,
           description: `commits in '${branch.name}' missing from '${currentName}'`,
@@ -189,6 +238,7 @@ export class BranchesPopup {
                 confirmation.confirmLabel,
               )) === confirmation.confirmLabel,
             resolveCheckoutConflict: promptCheckoutConflict,
+            resolveBranchInOtherWorktree: promptBranchInOtherWorktree,
           }),
       );
       if (result.notice) void vscode.window.showInformationMessage(result.notice);

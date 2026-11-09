@@ -12,7 +12,9 @@ export type RepositoryWatchFactory = (
 ) => WatchDisposable;
 
 const WORKTREE_PATTERNS = ['HEAD', 'index', 'logs/**'] as const;
-const COMMON_PATTERNS = ['refs/**', 'packed-refs', 'logs/**'] as const;
+// worktrees/* comes and goes with each worktree (its folder is deleted as a whole, so the files in it
+// may not report); worktrees/*/HEAD changes when one switches branch.
+const COMMON_PATTERNS = ['refs/**', 'packed-refs', 'logs/**', 'worktrees/*', 'worktrees/*/HEAD'] as const;
 
 interface WatchedTarget {
   repositoryIds: Set<string>;

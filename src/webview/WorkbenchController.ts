@@ -80,6 +80,7 @@ export interface WorkbenchControllerOptions {
   operationService?: Pick<GitOperationService, 'run'>;
   confirmOperation?(confirmation: OperationConfirmation): Promise<boolean>;
   resolveCheckoutConflict?: GitOperationRunOptions['resolveCheckoutConflict'];
+  resolveBranchInOtherWorktree?: GitOperationRunOptions['resolveBranchInOtherWorktree'];
   /** Shows an informational message, such as a cherry-pick that had nothing to apply. */
   showInformation?(message: string): void;
   withProgress?<T>(title: string, task: () => Promise<T>): Promise<T>;
@@ -1128,11 +1129,10 @@ export class WorkbenchController {
 
     await this.options.postMessage({ type: 'loading', requestId, repositoryId, scope: 'log' });
     const cwd = fileURLToPath(repository.rootUri);
-    const refs = await this.options.gitService.getRefs(
-      cwd,
-      repository.currentBranch,
-      abortController.signal,
-    );
+    const [refs, worktrees] = await Promise.all([
+      this.options.gitService.getRefs(cwd, repository.currentBranch, abortController.signal),
+      replace ? this.options.gitService.getWorktrees(cwd, abortController.signal) : undefined,
+    ]);
     if (logSequence !== this.logRequestSequence) return;
     const storedFilters = this.filters.get(repositoryId) ?? EMPTY_LOG_FILTERS;
     const knownRefs = new Set(refs.map((ref) => ref.fullName));
@@ -1216,6 +1216,7 @@ export class WorkbenchController {
       requestId,
       repositoryId,
       refs,
+      ...(worktrees ? { worktrees } : {}),
       commits,
       filters,
       ...(restoredSelectedHash ? { selectedHash: restoredSelectedHash } : {}),
@@ -1370,6 +1371,9 @@ export class WorkbenchController {
         },
         ...(this.options.resolveCheckoutConflict
           ? { resolveCheckoutConflict: this.options.resolveCheckoutConflict }
+          : {}),
+        ...(this.options.resolveBranchInOtherWorktree
+          ? { resolveBranchInOtherWorktree: this.options.resolveBranchInOtherWorktree }
           : {}),
       }) ??
       Promise.reject(new Error('Git operations are not available.'));

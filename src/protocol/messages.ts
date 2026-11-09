@@ -7,6 +7,7 @@ import type {
   RefLabel,
   RepositorySummary,
   StashEntry,
+  WorktreeInfo,
 } from '../shared/models';
 import type { GraphContinuationState } from '../graph/layoutCommitGraph';
 
@@ -170,6 +171,9 @@ export type GitOperationRequest =
   | { kind: 'setRemoteUrl'; name: string; url: string }
   | { kind: 'renameRemote'; oldName: string; newName: string }
   | { kind: 'removeRemote'; name: string }
+  | { kind: 'addWorktree'; path: string; ref: string; newBranch?: string; track?: boolean }
+  | { kind: 'removeWorktree'; path: string; force?: boolean }
+  | { kind: 'pruneWorktrees' }
   | { kind: 'pull' }
   | { kind: 'push'; forceWithLease?: boolean; remote?: string; targetRef?: string }
   | { kind: 'pushHead'; remote: string; branch: string }
@@ -243,6 +247,9 @@ export type WorkbenchCommand =
   | { kind: 'openPushDialog'; source?: string }
   | { kind: 'openMergeDialog'; ref: string }
   | { kind: 'manageRemotes' }
+  | { kind: 'manageWorktrees' }
+  | { kind: 'newWorktree'; ref?: string }
+  | { kind: 'worktreeAction'; path: string; action: 'switch' | 'newWindow' | 'addToWorkspace' | 'reveal' | 'copyPath' | 'remove' }
   | { kind: 'openCommitPanel' };
 
 export type ErrorRecoveryAction = { kind: 'forceDeleteBranch'; branch: string };
@@ -279,6 +286,8 @@ export type ExtensionToWebviewMessage =
       requestId: string;
       repositoryId: string;
       refs: RefLabel[];
+      /** Sent with every full load; absent on later pages. */
+      worktrees?: WorktreeInfo[];
       commits: CommitSummary[];
       filters: LogFilters;
       selectedHash?: string;
@@ -672,7 +681,19 @@ function isWorkbenchCommand(value: unknown): value is WorkbenchCommand {
       return isSafeGitToken(value.ref);
     case 'openCommitPanel':
     case 'manageRemotes':
+    case 'manageWorktrees':
       return true;
+    case 'newWorktree':
+      return value.ref === undefined || isSafeGitToken(value.ref);
+    case 'worktreeAction':
+      return (
+        typeof value.path === 'string' &&
+        value.path.length > 0 &&
+        value.path.length <= 4096 &&
+        !/[\0\r\n]/u.test(value.path) &&
+        typeof value.action === 'string' &&
+        ['switch', 'newWindow', 'addToWorkspace', 'reveal', 'copyPath', 'remove'].includes(value.action)
+      );
     default:
       return false;
   }

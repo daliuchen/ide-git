@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -32,6 +33,7 @@ import type {
   HistoryEntry,
   RefKind,
   RefLabel,
+  WorktreeInfo,
   RepositorySummary,
   StashEntry,
 } from '../../src/shared/models';
@@ -39,6 +41,7 @@ import { getVsCodeApi } from './vscodeApi';
 import { buildFileTree, flattenFileTree, type FileTreeNode } from './buildFileTree';
 import { buildRefTree, type RefTreeNode } from './buildRefTree';
 import { parseStashSubject } from './stashLabel';
+import { worktreeLabel } from '../../src/worktrees/worktreeLabel';
 import { advanceCommitWindow } from './commitWindow';
 import { CommitList } from './CommitList';
 import { formatCommitDate } from './formatCommitDate';
@@ -117,6 +120,7 @@ interface WorkbenchState {
   repositories: RepositorySummary[];
   selectedRepositoryId: string | undefined;
   refs: RefLabel[];
+  worktrees: WorktreeInfo[];
   commits: CommitSummary[];
   commitListRevision: number;
   selectedHash: string | undefined;
@@ -186,6 +190,7 @@ const initialState: WorkbenchState = {
   repositories: [],
   selectedRepositoryId: undefined,
   refs: [],
+  worktrees: [],
   commits: [],
   commitListRevision: 0,
   selectedHash: undefined,
@@ -382,6 +387,7 @@ function RefTreeNodes({
   onSelect,
   onKeyDown,
   onContextMenu,
+  worktreeOf,
 }: {
   nodes: RefTreeNode[];
   depth: number;
@@ -393,6 +399,8 @@ function RefTreeNodes({
   onSelect(ref: RefLabel): void;
   onKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>, ref: RefLabel): void;
   onContextMenu(ref: RefLabel, x: number, y: number): void;
+  /** The other worktree that has this local branch checked out. */
+  worktreeOf(ref: RefLabel): WorktreeInfo | undefined;
 }) {
   return nodes.map((node) => {
     if (node.type === 'directory') {
@@ -440,6 +448,7 @@ function RefTreeNodes({
               onSelect={onSelect}
               onKeyDown={onKeyDown}
               onContextMenu={onContextMenu}
+              worktreeOf={worktreeOf}
             />
           ) : null}
         </div>
@@ -447,13 +456,14 @@ function RefTreeNodes({
     }
 
     const ref = node.ref;
+    const worktree = worktreeOf(ref);
     return (
       <button
         type="button"
         className={`ref-item${ref.isCurrent ? ' current-ref' : ''}`}
         style={{ paddingLeft: 25 + depth * 14 }}
         key={ref.fullName}
-        title={ref.fullName}
+        title={worktree ? `${ref.fullName} — checked out in ${worktree.displayPath}` : ref.fullName}
         data-ref-item="true"
         onClick={() => onSelect(ref)}
         onKeyDown={(event) => onKeyDown(event, ref)}
@@ -467,6 +477,9 @@ function RefTreeNodes({
           {ref.kind === 'tag' ? '◆' : '⌁'}
         </span>
         <span className="ref-name">{node.name}</span>
+        {worktree ? (
+          <i className="codicon codicon-folder-library ref-worktree-mark" aria-label="in another worktree" />
+        ) : null}
         {ref.ahead || ref.behind ? (
           <span className="tracking">
             {ref.ahead ? `↑${String(ref.ahead)}` : ''}
@@ -501,6 +514,7 @@ export function App() {
     | { kind: 'ref'; repositoryId: string; ref: RefLabel; x: number; y: number }
     | { kind: 'file'; repositoryId: string; file: ChangedFile; x: number; y: number }
     | { kind: 'head'; repositoryId: string; hash: string; x: number; y: number }
+    | { kind: 'worktree'; repositoryId: string; worktree: WorktreeInfo; x: number; y: number }
     | undefined
   >();
   const [measuredContextMenuPosition, setMeasuredContextMenuPosition] = useState<
@@ -950,6 +964,7 @@ export function App() {
             layout: message.layout,
             filters: defaultFilters,
             refs: [],
+            worktrees: [],
             commits: [],
             commitListRevision: current.commitListRevision + 1,
             details: undefined,
@@ -1089,6 +1104,7 @@ export function App() {
               ...current,
               selectedRepositoryId: message.repositoryId,
               refs: message.refs,
+              worktrees: message.worktrees ?? current.worktrees,
               filters: preservesPendingFilters ? current.filters : message.filters,
               commits: commitWindow.commits,
               commitListRevision: message.replace
@@ -1140,6 +1156,7 @@ export function App() {
                 repositories: message.repositories,
                 selectedRepositoryId,
                 refs: [],
+                worktrees: [],
                 commits: [],
                 commitListRevision: current.commitListRevision + 1,
                 nextLogOffset: 0,
@@ -1239,6 +1256,7 @@ export function App() {
               repositories,
               selectedRepositoryId: message.repositoryId,
               refs: [],
+              worktrees: [],
               commits: [],
               commitListRevision: current.commitListRevision + 1,
               selectedHash: undefined,
@@ -1280,6 +1298,7 @@ export function App() {
                     ? {
                         selectedRepositoryId: message.selectedRepositoryId,
                         refs: [],
+                        worktrees: [],
                         commits: [],
                         commitListRevision: current.commitListRevision + 1,
                       }
@@ -1603,6 +1622,7 @@ export function App() {
       ...current,
       selectedRepositoryId: repositoryId,
       refs: [],
+      worktrees: [],
       commits: [],
       commitListRevision: current.commitListRevision + 1,
       nextLogOffset: 0,
@@ -1764,6 +1784,17 @@ export function App() {
     if (commit) document.querySelector<HTMLElement>(`[data-commit-hash="${commit.hash}"]`)?.focus();
   };
 
+  const worktreeByBranch = useMemo(
+    () =>
+      new Map(
+        state.worktrees
+          .filter((worktree) => worktree.branch && !worktree.isCurrent && !worktree.prunable)
+          .map((worktree) => [worktree.branch ?? '', worktree]),
+      ),
+    [state.worktrees],
+  );
+  const worktreeOfRef = (ref: RefLabel): WorktreeInfo | undefined =>
+    ref.kind === 'local' ? worktreeByBranch.get(ref.shortName) : undefined;
   const toggleRefGroup = (group: string): void => {
     setCollapsedRefGroups((current) => {
       const next = new Set(current);
@@ -2390,14 +2421,19 @@ export function App() {
               <button
                 type="button"
                 className="filter-chip-action"
-                aria-label={`Clear ${filter.name.toLowerCase()} filter`}
-                title={`Clear ${filter.name.toLowerCase()} filter`}
+                // Without a branch filter the Log shows HEAD, so clearing it goes back to this worktree's branch.
+                aria-label={filter.kind === 'branch' ? 'Back to current branch' : `Clear ${filter.name.toLowerCase()} filter`}
+                title={
+                  filter.kind === 'branch'
+                    ? `Back to ${currentBranchLabel} (this worktree)`
+                    : `Clear ${filter.name.toLowerCase()} filter`
+                }
                 onClick={() => {
                   applyFilters(filter.clear(state.filters));
                   if (filterPopup === filter.kind) setFilterPopup(undefined);
                 }}
               >
-                ×
+                {filter.kind === 'branch' ? '↩' : '×'}
               </button>
             ) : null}
           </span>
@@ -2714,6 +2750,91 @@ export function App() {
     if (!remote) return undefined;
     return { remote, branch: upstream.slice(remote.length + 1) };
   })();
+
+  // Above Tags: local work first, then where it is checked out.
+  const worktreesSection =
+    state.worktrees.length > 1 && !refSearchActive ? (
+      <section className="ref-group" aria-label="Worktrees">
+        <div className="ref-group-heading-row">
+          <button
+            type="button"
+            className="ref-group-heading"
+            aria-expanded={!collapsedRefGroups.has('worktrees')}
+            onClick={() => toggleRefGroup('worktrees')}
+          >
+            <span aria-hidden="true">{collapsedRefGroups.has('worktrees') ? '›' : '⌄'}</span>
+            <span>Worktrees</span>
+            <span className="ref-count">{state.worktrees.length}</span>
+          </button>
+          <button
+            type="button"
+            className="ref-group-action"
+            aria-label="New worktree"
+            title="New Worktree…"
+            onClick={() => runWorkbenchCommand({ kind: 'newWorktree' })}
+          >
+            <i className="codicon codicon-add" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="ref-group-action"
+            aria-label="Manage worktrees"
+            title="Manage Worktrees…"
+            onClick={() => runWorkbenchCommand({ kind: 'manageWorktrees' })}
+          >
+            <i className="codicon codicon-settings-gear" aria-hidden="true" />
+          </button>
+        </div>
+        {!collapsedRefGroups.has('worktrees')
+          ? state.worktrees.map((worktree) => {
+              const canOpen = !worktree.isCurrent && !worktree.bare && !worktree.prunable;
+              const branchRef = worktree.branch
+                ? state.refs.find((ref) => ref.fullName === `refs/heads/${worktree.branch ?? ''}`)
+                : undefined;
+              return (
+                <button
+                  type="button"
+                  key={worktree.path}
+                  className={`ref-item worktree-item${worktree.isCurrent ? ' current-ref' : ''}${worktree.prunable ? ' stale-worktree' : ''}`}
+                  title={[
+                    worktree.path,
+                    worktree.isCurrent ? 'This window' : canOpen ? 'Double-click to switch this window to it' : '',
+                    worktree.prunable ? `Stale: ${worktree.prunable}` : '',
+                    worktree.locked !== undefined ? `Locked${worktree.locked ? `: ${worktree.locked}` : ''}` : '',
+                  ]
+                    .filter(Boolean)
+                    .join('\n')}
+                  onClick={() => {
+                    if (branchRef) selectRef(branchRef);
+                  }}
+                  onDoubleClick={() => {
+                    if (canOpen) runWorkbenchCommand({ kind: 'worktreeAction', path: worktree.path, action: 'switch' });
+                  }}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    if (!state.selectedRepositoryId) return;
+                    setContextMenu({
+                      kind: 'worktree',
+                      repositoryId: state.selectedRepositoryId,
+                      worktree,
+                      x: event.clientX,
+                      y: event.clientY,
+                    });
+                  }}
+                >
+                  <span className="ref-folder-chevron" aria-hidden="true" />
+                  <i
+                    className={`codicon codicon-${worktree.isCurrent ? 'check' : worktree.prunable ? 'warning' : 'folder'} ref-icon`}
+                    aria-hidden="true"
+                  />
+                  <span className="ref-name">{worktreeLabel(worktree)}</span>
+                  <span className="worktree-path">{worktree.displayPath.split(/[\\/]/u).filter(Boolean).at(-1) ?? worktree.displayPath}</span>
+                </button>
+              );
+            })
+          : null}
+      </section>
+    ) : null;
 
   const globalToolbar = (
     <header className="global-toolbar" role="toolbar" aria-label="Global Git actions">
@@ -3142,55 +3263,59 @@ export function App() {
             {refGroupTrees.map(({ group, refs, tree }) => {
               const collapsed = !refSearchActive && collapsedRefGroups.has(group.kind);
               return (
-                <section className="ref-group" key={group.kind}>
-                  <div className="ref-group-heading-row">
-                    <button
-                      type="button"
-                      className="ref-group-heading"
-                      aria-expanded={!collapsed}
-                      disabled={refSearchActive}
-                      onClick={() => toggleRefGroup(group.kind)}
-                    >
-                      <span aria-hidden="true">{collapsed ? '›' : '⌄'}</span>
-                      <span>{group.label}</span>
-                      <span className="ref-count">{refs.length}</span>
-                    </button>
-                    {group.kind === 'remote' ? (
+                <Fragment key={group.kind}>
+                  {group.kind === 'tag' ? worktreesSection : null}
+                  <section className="ref-group">
+                    <div className="ref-group-heading-row">
                       <button
                         type="button"
-                        className="ref-group-action"
-                        aria-label="Manage remotes"
-                        title="Manage Remotes…"
-                        onClick={() => runWorkbenchCommand({ kind: 'manageRemotes' })}
+                        className="ref-group-heading"
+                        aria-expanded={!collapsed}
+                        disabled={refSearchActive}
+                        onClick={() => toggleRefGroup(group.kind)}
                       >
-                        <i className="codicon codicon-settings-gear" aria-hidden="true" />
+                        <span aria-hidden="true">{collapsed ? '›' : '⌄'}</span>
+                        <span>{group.label}</span>
+                        <span className="ref-count">{refs.length}</span>
                       </button>
+                      {group.kind === 'remote' ? (
+                        <button
+                          type="button"
+                          className="ref-group-action"
+                          aria-label="Manage remotes"
+                          title="Manage Remotes…"
+                          onClick={() => runWorkbenchCommand({ kind: 'manageRemotes' })}
+                        >
+                          <i className="codicon codicon-settings-gear" aria-hidden="true" />
+                        </button>
+                      ) : null}
+                    </div>
+                    {!collapsed ? (
+                      <RefTreeNodes
+                        nodes={tree}
+                        depth={0}
+                        group={group}
+                        folderKeyPrefix={`${state.selectedRepositoryId ?? ''}:${group.kind}`}
+                        collapsedFolders={collapsedRefFolders}
+                        forceExpanded={refSearchActive}
+                        onToggleFolder={toggleRefFolder}
+                        onSelect={selectRef}
+                        onKeyDown={handleRefKeyDown}
+                        worktreeOf={worktreeOfRef}
+                        onContextMenu={(ref, x, y) => {
+                          if (!state.selectedRepositoryId) return;
+                          setContextMenu({
+                            kind: 'ref',
+                            repositoryId: state.selectedRepositoryId,
+                            ref,
+                            x,
+                            y,
+                          });
+                        }}
+                      />
                     ) : null}
-                  </div>
-                  {!collapsed ? (
-                    <RefTreeNodes
-                      nodes={tree}
-                      depth={0}
-                      group={group}
-                      folderKeyPrefix={`${state.selectedRepositoryId ?? ''}:${group.kind}`}
-                      collapsedFolders={collapsedRefFolders}
-                      forceExpanded={refSearchActive}
-                      onToggleFolder={toggleRefFolder}
-                      onSelect={selectRef}
-                      onKeyDown={handleRefKeyDown}
-                      onContextMenu={(ref, x, y) => {
-                        if (!state.selectedRepositoryId) return;
-                        setContextMenu({
-                          kind: 'ref',
-                          repositoryId: state.selectedRepositoryId,
-                          ref,
-                          x,
-                          y,
-                        });
-                      }}
-                    />
-                  ) : null}
-                </section>
+                  </section>
+                </Fragment>
               );
             })}
           </div>
@@ -4214,6 +4339,86 @@ export function App() {
               </button>
             </>
           ) : null}
+          {contextMenu.kind === 'worktree' ? (
+            <>
+              {!contextMenu.worktree.isCurrent && !contextMenu.worktree.bare && !contextMenu.worktree.prunable ? (
+                <>
+                  {(
+                    [
+                      ['switch', 'Switch to This Worktree'],
+                      ['newWindow', 'Open in New Window'],
+                    ] as const
+                  ).map(([action, label]) => (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      key={action}
+                      onClick={() =>
+                        runWorkbenchCommand(
+                          { kind: 'worktreeAction', path: contextMenu.worktree.path, action },
+                          contextMenu.repositoryId,
+                        )
+                      }
+                    >
+                      {label}
+                    </button>
+                  ))}
+                  <div className="context-menu-separator" role="separator" />
+                </>
+              ) : null}
+              {!contextMenu.worktree.prunable ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() =>
+                    runWorkbenchCommand(
+                      { kind: 'worktreeAction', path: contextMenu.worktree.path, action: 'reveal' },
+                      contextMenu.repositoryId,
+                    )
+                  }
+                >
+                  Reveal in File Manager
+                </button>
+              ) : null}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() =>
+                  runWorkbenchCommand(
+                    { kind: 'worktreeAction', path: contextMenu.worktree.path, action: 'copyPath' },
+                    contextMenu.repositoryId,
+                  )
+                }
+              >
+                Copy Path
+              </button>
+              {contextMenu.worktree.prunable ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => runWorkbenchCommand({ kind: 'manageWorktrees' }, contextMenu.repositoryId)}
+                >
+                  Prune Stale Worktrees…
+                </button>
+              ) : !contextMenu.worktree.isMain && !contextMenu.worktree.isCurrent && !contextMenu.worktree.bare ? (
+                <>
+                  <div className="context-menu-separator" role="separator" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() =>
+                      runWorkbenchCommand(
+                        { kind: 'worktreeAction', path: contextMenu.worktree.path, action: 'remove' },
+                        contextMenu.repositoryId,
+                      )
+                    }
+                  >
+                    Remove Worktree…
+                  </button>
+                </>
+              ) : null}
+            </>
+          ) : null}
           {contextMenu.kind === 'ref' ? (
             <>
               <button
@@ -4327,7 +4532,21 @@ export function App() {
               </button>
               {!selectedRepository?.isBare && !selectedRepository?.operationState ? (
                 <>
-                  {contextMenu.ref.kind === 'local' ? (
+                  {contextMenu.ref.kind === 'local' && worktreeOfRef(contextMenu.ref) ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      title={`Checked out in ${worktreeOfRef(contextMenu.ref)?.displayPath ?? ''}`}
+                      onClick={() =>
+                        runWorkbenchCommand(
+                          { kind: 'worktreeAction', path: worktreeOfRef(contextMenu.ref)?.path ?? '', action: 'switch' },
+                          contextMenu.repositoryId,
+                        )
+                      }
+                    >
+                      Switch to Its Worktree
+                    </button>
+                  ) : contextMenu.ref.kind === 'local' ? (
                     <button
                       type="button"
                       role="menuitem"
@@ -4340,6 +4559,18 @@ export function App() {
                       }
                     >
                       Checkout
+                    </button>
+                  ) : null}
+                  {contextMenu.ref.kind !== 'tag' && !contextMenu.ref.shortName.endsWith('/HEAD') ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      title="Check out a branch in a new folder, next to this one"
+                      onClick={() =>
+                        runWorkbenchCommand({ kind: 'newWorktree', ref: contextMenu.ref.shortName }, contextMenu.repositoryId)
+                      }
+                    >
+                      New Worktree from Here…
                     </button>
                   ) : null}
                   {contextMenu.ref.kind === 'remote' &&
