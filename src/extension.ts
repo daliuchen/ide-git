@@ -578,7 +578,9 @@ export function activate(context: vscode.ExtensionContext): void {
     const repository = await resolveRepository(resource);
     if (repository) await remotesManager.show(repository);
   });
-  const worktreesManager = new WorktreesManager(runner, operationService);
+  const worktreesManager = new WorktreesManager(runner, operationService, (repository) =>
+    workbenchProvider.notifyRepositoryChanged(repository.id),
+  );
   const manageWorktreesCommand = vscode.commands.registerCommand('gitLogWorkbench.manageWorktrees', async (resource?: unknown) => {
     const repository = await resolveRepository(resource);
     if (repository) await worktreesManager.show(repository);

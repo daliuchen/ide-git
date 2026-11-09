@@ -291,6 +291,11 @@ export class WorkbenchViewProvider implements vscode.WebviewViewProvider, vscode
     await this.flushPendingHistory();
   }
 
+  /** Reloads the Log after a change its file watchers may miss (a deleted worktree folder). */
+  async notifyRepositoryChanged(repositoryId: string): Promise<void> {
+    await this.session?.controller.notifyRepositoryChanged(repositoryId);
+  }
+
   dispose(): void {
     this.disposeSession();
   }

@@ -48,7 +48,7 @@ Uninstall the original **Git Log** (`ascenx.git-log`) first if you have it.
 | See where my branch stands | The status bar on the right shows `main ↑2 ↓1`; click it for Branches |
 | Switch branches with uncommitted work | Check out as usual; if your changes are in the way, pick **Smart Checkout** to carry them over |
 | Add or change a remote | ⚙ next to **Remote** in the Log's branch list, or `IDE Git: Manage Remotes…` |
-| Work on several branches at once (worktrees) | **Worktrees** in the Log's branch list (double-click to switch this window), **New Worktree from Here…** on a branch, or `IDE Git: Manage Worktrees…` |
+| Work on several branches at once (worktrees) | **Worktree ▾** in the Log's toolbar (pick one to switch this window), **New Worktree from Here…** on a branch, or `IDE Git: Manage Worktrees…` |
 | Push or pull | **Push…** / **Pull** on the Log toolbar |
 | Put work aside | Right-click files → **Shelve Changes…**; find them under **Stashes** on the Log toolbar, with their branch and time |
 | Review a commit file by file | Double-click a file in **Changed Files**, then **F7** / **Shift+F7**: after the last change, press again to open the next file (also in the Commit window); the list selects the file being shown |

@@ -51,6 +51,8 @@ export class WorktreesManager {
   constructor(
     private readonly runner: GitRunner,
     private readonly operations: GitOperationService,
+    /** Called after a worktree is added or removed, so views that list worktrees reload. */
+    private readonly onDidChange: (repository: RepositorySummary) => Promise<void> = () => Promise.resolve(),
   ) {}
 
   async list(repository: RepositorySummary): Promise<WorktreeInfo[]> {
@@ -276,8 +278,8 @@ export class WorktreesManager {
     await this.run(repository, { kind: 'pruneWorktrees' }, 'Pruning worktrees…');
   }
 
-  private runOrThrow(repository: RepositorySummary, operation: GitOperationRequest, title: string) {
-    return vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title, cancellable: false }, () =>
+  private async runOrThrow(repository: RepositorySummary, operation: GitOperationRequest, title: string) {
+    const result = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title, cancellable: false }, () =>
       this.operations.run(repository, operation, {
         confirm: async (confirmation) =>
           (await vscode.window.showWarningMessage(
@@ -287,6 +289,8 @@ export class WorktreesManager {
           )) === confirmation.confirmLabel,
       }),
     );
+    if (!result.cancelled) await this.onDidChange(repository).catch(() => undefined);
+    return result;
   }
 
   /** Runs an operation with progress; false after reporting a failure or a cancel. */

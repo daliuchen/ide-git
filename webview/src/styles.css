@@ -805,13 +805,52 @@ select:focus-visible,
   font-size: 12px;
 }
 
-.worktree-item .codicon.ref-icon {
-  font-size: 13px;
+.worktree-count {
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  font-size: 10px;
 }
 
-.worktree-item .ref-name {
+.worktree-list {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 2px;
+}
+
+.worktree-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  text-align: left;
+  cursor: pointer;
+}
+
+.worktree-option:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.worktree-option.current {
+  color: var(--vscode-gitDecoration-addedResourceForeground);
+  font-weight: 600;
+  cursor: default;
+}
+
+.worktree-name {
   flex: 0 1 auto;
   min-width: 3ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .worktree-path {
@@ -821,11 +860,12 @@ select:focus-visible,
   overflow: hidden;
   color: var(--vscode-descriptionForeground);
   font-size: 11px;
+  font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.stale-worktree .ref-name {
+.stale-worktree .worktree-name {
   color: var(--vscode-descriptionForeground);
   text-decoration: line-through;
 }

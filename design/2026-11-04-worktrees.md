@@ -48,9 +48,9 @@ Manage Worktrees — ide-git
 3. **Add to Workspace**：留在当前窗口，扩展把它当成另一个仓库（Log 里切仓库、Commit 窗口里单独一组）。
 4. **Reveal in File Manager**、**Copy Path**、**Remove…**。当前窗口那个和主工作树不出现 Remove。
 
-### Log 左侧的 Worktrees 分组（用户追加）
+### Log 工具栏的 Worktree 下拉（用户追加）
 
-和 Local / Remote / Tags 并列，仓库有两个以上 worktree 时出现。每行显示分支（detached 显示短 hash）和目录名，悬停看完整路径；单击筛选到那个分支，**双击切过去**，右键是上面那些操作；标题旁 `+` 新建、⚙ 打开 Manage Worktrees。
+Log 顶部筛选栏 Branch / User / Date / Paths 后面加 **Worktree: <当前分支> ▾**（多于一个时带数量），一直显示，方便发现。点开列出全部 worktree（分支 + 目录名，悬停看完整路径），**单击就把窗口切过去**，右键是上面那些操作；底部 New Worktree… 和 Manage Worktrees…。
 
 ### New Worktree…
 
@@ -101,11 +101,13 @@ Manage Worktrees — ide-git
 
 ## 实际实现与偏差
 
-- **默认操作改成 Switch to This Worktree**，并加了 Log 的 Worktrees 分组：方案确认时用户追加的两点，上面已写进方案。
+- **默认操作改成 Switch to This Worktree**：方案确认时用户追加，上面已写进方案。
+- **Log 里的位置**：第一版放在左侧分支列表最底下的 Worktrees 分组（双击切换），用户试用后觉得太靠下不好找，改成工具栏 Paths 旁边的 Worktree 下拉，分组去掉。
+- **删除后 Log 不刷新（试用时发现）**：Git 删除 worktree 是整个删掉 `.git/worktrees/<名>/`，里面文件的删除事件不一定报上来，Log 一直显示已删的那行。修法：监听再加 `worktrees/*` 目录本身；Manage Worktrees 每次新建、删除、清理成功后直接通知 Log 刷新（`WorkbenchViewProvider.notifyRepositoryChanged`），不只靠监听。e2e 加了「删除后 Log 里消失」这一项。
 - **分支占用不靠 `%(worktreepath)`**：Log 和 Branches 都直接用 `git worktree list --porcelain` 的结果（Log 每次完整加载时随 `repositoryData.worktrees` 一起发），一个来源，不用改 `parseRefs` 的字段。
 - **Checkout 被占用的分支**：不在 checkout 前预先查询，而是在 Git 报 `is already used by worktree at` / `is already checked out at`（两种版本的措辞）时交给 `GitOperationRunOptions.resolveBranchInOtherWorktree`，弹框 Switch to Worktree / Open in New Window。Log 和 Branches 里被占用的分支本来就不显示 Checkout，改为 **Switch to Its Worktree**。
 - **webview 不能直接删 worktree**：Log 只发 `worktreeAction { path, action }`，扩展端重新列一遍、确认路径确实是这个仓库的 worktree 才执行；`addWorktree` / `removeWorktree` / `pruneWorktrees` 不在 webview 的 `runOperation` 白名单里。
-- **自动刷新**：监听公共 git 目录的 `worktrees/*/HEAD`（新建、删除、别的 worktree 切分支都会变），在终端里建的 worktree 也会出现在 Log 里。
+- **自动刷新**：监听公共 git 目录的 `worktrees/*` 和 `worktrees/*/HEAD`（新建、删除、别的 worktree 切分支），在终端里建的 worktree 也会出现在 Log 里。
 - **新建后的通知按钮用短文字**（Switch / New Window / Add to Workspace），长文字在通知里会被截断。
 - 目录不存在但 Git 版本太旧不报 `prunable` 时，Manage Worktrees 自己检查目录是否存在。
-- 验证：单测（解析、路径、错误识别、协议校验、Log 分组的双击/右键/分支标记）；真实临时仓库（从本地/新/远程分支建，路径带空格和中文；被占用分支 checkout 交给回调；干净的直接删、有改动的第一次被拒、force 成功、分支保留；不确认不删；prune；非法输入在执行前拒绝；rebase 进行中能建）；e2e `worktrees` 9 项（命令面板新建 → Log 分组和分支标记 → 右键菜单 → 确认后删除 → 终端新建的出现 → 双击把窗口切过去）。
+- 验证：单测（解析、路径、错误识别、协议校验、Log 工具栏下拉的单击切换/右键/新建/管理和分支标记）；真实临时仓库（从本地/新/远程分支建，路径带空格和中文；被占用分支 checkout 交给回调；干净的直接删、有改动的第一次被拒、force 成功、分支保留；不确认不删；prune；非法输入在执行前拒绝；rebase 进行中能建）；e2e `worktrees` 10 项（命令面板新建 → 工具栏下拉和分支标记 → 右键菜单 → 确认后删除、Log 里随即消失 → 终端新建的出现 → 在下拉里点它把窗口切过去）。

@@ -1,5 +1,5 @@
 // Worktrees: create one from Manage Worktrees, see it in the Log (group and branch mark), remove it
-// from the Log, then switch this window to another worktree with a double-click.
+// from the Log, then switch this window to another worktree from the toolbar list.
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { enlargePanel, frameWith, git, initRepository, runCommand, writeFiles } from '../lib.mjs';
@@ -47,14 +47,25 @@ export default {
     await page.keyboard.press('Escape');
     await sleep(500);
 
-    // 2. The Log shows a Worktrees group and marks feat/x as checked out elsewhere.
+    // 2. The Log's toolbar lists the worktrees and the branch list marks feat/x as checked out elsewhere.
     await runCommand(page, 'IDE Git: Open Log');
     await sleep(3000);
     await enlargePanel(page);
     const log = await frameWith(page, '[aria-label="Commit log"]', 20000);
-    const section = log.getByRole('region', { name: 'Worktrees' });
-    await section.waitFor({ timeout: 10000 });
-    check('the Log lists both worktrees', (await section.locator('.worktree-item').count()) === 2);
+    const toolbarButton = log.getByRole('button', { name: 'Worktree: main' });
+    const popup = log.getByRole('dialog', { name: 'Worktrees' });
+    const openList = async () => {
+      if (!(await popup.count())) await toolbarButton.click();
+      await popup.waitFor({ timeout: 10000 });
+      await sleep(300);
+    };
+    await toolbarButton.waitFor({ timeout: 10000 });
+    await openList();
+    check('the toolbar lists both worktrees', (await popup.locator('.worktree-option[title^="/"]').count()) === 2);
+    await shot('toolbar');
+    await page.keyboard.press('Escape');
+    await log.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => undefined);
+    await sleep(300);
     check('feat/x is marked as being in another worktree', (await log.locator('[title^="refs/heads/feat/x — checked out in"]').count()) === 1);
     await shot('log');
     await log.locator('[title^="refs/heads/feat/x"]').first().click({ button: 'right' });
@@ -64,29 +75,34 @@ export default {
     await sleep(300);
 
     // 3. Remove it from the Log after confirming.
-    await section.locator('.worktree-item', { hasText: 'feat/x' }).click({ button: 'right' });
+    await openList();
+    await popup.locator('.worktree-option', { hasText: 'feat/x' }).click({ button: 'right' });
     await sleep(500);
     await log.getByRole('menuitem', { name: 'Remove Worktree…' }).click();
     await sleep(800);
     await page.locator('.monaco-dialog-box').getByRole('button', { name: 'Remove Worktree' }).click();
     await sleep(2500);
     check('removed after confirming', worktreePaths().length === 1 && git(workspace, 'branch', '--list', 'feat/x') !== '');
+    await openList();
+    check('the Log drops the removed worktree', (await popup.locator('.worktree-option[title^="/"]').count()) === 1);
+    await page.keyboard.press('Escape');
 
-    // 4. A worktree created in the terminal shows up; double-clicking it switches this window.
+    // 4. A worktree created in the terminal shows up; picking it switches this window.
     const other = `${root}-feat-y`;
     git(workspace, 'worktree', 'add', '-q', other, 'feat/y');
     await runCommand(page, 'IDE Git: Open Log');
     await sleep(1500);
     await log.getByRole('button', { name: 'Refresh' }).first().click().catch(() => undefined);
     await sleep(2500);
-    const row = section.locator('.worktree-item', { hasText: 'feat/y' });
+    await openList();
+    const row = popup.locator('.worktree-option', { hasText: 'feat/y' });
     await row.waitFor({ timeout: 10000 });
-    await row.dblclick();
+    await row.click();
     let title = '';
     for (let attempt = 0; attempt < 20 && !title.includes('repo-feat-y'); attempt += 1) {
       await sleep(1000);
       title = await page.title().catch(() => '');
     }
-    check('double-click switched this window to the worktree', title.includes('repo-feat-y'), title);
+    check('clicking it switched this window to the worktree', title.includes('repo-feat-y'), title);
   },
 };
