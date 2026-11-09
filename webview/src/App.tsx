@@ -4347,7 +4347,6 @@ export function App() {
                     [
                       ['switch', 'Switch to This Worktree'],
                       ['newWindow', 'Open in New Window'],
-                      ['addToWorkspace', 'Add to Workspace'],
                     ] as const
                   ).map(([action, label]) => (
                     <button

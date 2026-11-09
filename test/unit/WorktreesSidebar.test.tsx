@@ -104,6 +104,8 @@ describe('Worktrees in the Log', () => {
 
     posted.length = 0;
     fireEvent.contextMenu(within(section).getByText('feat/x'));
+    expect(screen.getByRole('menuitem', { name: 'Switch to This Worktree' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Add to Workspace' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Remove Worktree…' }));
     expect(commands()).toEqual([{ kind: 'worktreeAction', path: '/Users/me/app-feat-x', action: 'remove' }]);
 
