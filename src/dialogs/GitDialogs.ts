@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as vscode from 'vscode';
-import { promptCheckoutConflict } from '../git/checkoutConflictPrompt';
+import { promptBranchInOtherWorktree, promptCheckoutConflict } from '../git/checkoutConflictPrompt';
 import type { DiffManager } from '../diff/DiffManager';
 import { classifyGitError } from '../git/classifyGitError';
 import type { GitOperationService } from '../git/GitOperationService';
@@ -393,6 +393,7 @@ export class GitDialogs implements vscode.Disposable {
                 confirmation.confirmLabel,
               )) === confirmation.confirmLabel,
             resolveCheckoutConflict: promptCheckoutConflict,
+            resolveBranchInOtherWorktree: promptBranchInOtherWorktree,
           }),
       );
       if (result.notice) void vscode.window.showInformationMessage(result.notice);

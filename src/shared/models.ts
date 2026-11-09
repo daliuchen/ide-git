@@ -51,6 +51,24 @@ export interface CommitDetails extends CommitSummary {
   signature: SignatureStatus;
 }
 
+/** One entry of `git worktree list`. */
+export interface WorktreeInfo {
+  path: string;
+  /** The path with the home directory shortened to `~`, for display. */
+  displayPath: string;
+  head?: CommitHash;
+  /** Short branch name; absent when the worktree is detached or bare. */
+  branch?: string;
+  detached: boolean;
+  bare: boolean;
+  /** The first entry: the repository's main worktree, which cannot be removed. */
+  isMain: boolean;
+  /** The worktree this Log or window shows. */
+  isCurrent: boolean;
+  locked?: string;
+  prunable?: string;
+}
+
 export interface RepositorySummary {
   id: RepositoryId;
   rootUri: string;

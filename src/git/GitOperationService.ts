@@ -8,6 +8,7 @@ import { inspectRepository } from '../repositories/discoverRepositories';
 import { GitCommandError, type GitRunner } from './GitRunner';
 import { parseCheckoutConflict, type CheckoutConflict } from './checkoutConflicts';
 import { remoteNameProblem, remoteUrlProblem } from '../remotes/remotes';
+import { parseBranchInOtherWorktree, worktreePathProblem } from '../worktrees/worktrees';
 
 export interface GitOperationResult {
   message: string;
@@ -36,6 +37,11 @@ export interface GitOperationRunOptions {
    * reported as is.
    */
   resolveCheckoutConflict?(conflict: CheckoutConflict): Promise<'smart' | 'force' | undefined>;
+  /**
+   * Called instead of reporting an error when the branch is already checked out in another
+   * worktree, so the user can go to that worktree.
+   */
+  resolveBranchInOtherWorktree?(branch: string, path: string): Promise<void>;
 }
 
 type CheckoutOperation = Extract<
@@ -116,7 +122,23 @@ function validRemoteUrl(url: string): string {
   return url.trim();
 }
 
-const REMOTE_OPERATIONS = new Set<GitOperationRequest['kind']>(['fetch', 'addRemote', 'setRemoteUrl', 'renameRemote', 'removeRemote']);
+function validWorktreePath(path: string): string {
+  const problem = worktreePathProblem(path);
+  if (problem) throw new Error(`Invalid worktree path: ${problem}`);
+  return path.trim();
+}
+
+// These leave the current worktree's files alone, so they may run while a merge or rebase is in progress.
+const REMOTE_OPERATIONS = new Set<GitOperationRequest['kind']>([
+  'fetch',
+  'addRemote',
+  'setRemoteUrl',
+  'renameRemote',
+  'removeRemote',
+  'addWorktree',
+  'removeWorktree',
+  'pruneWorktrees',
+]);
 
 function validateCommitMessage(value: string, label: string): string {
   if (!value.trim() || value.length > 100_000 || value.includes('\0')) {
@@ -185,6 +207,20 @@ export function buildOperationArguments(
       return ['remote', 'rename', '--', validRemoteName(operation.oldName), validRemoteName(operation.newName)];
     case 'removeRemote':
       return ['remote', 'remove', '--', validRemoteName(operation.name)];
+    case 'addWorktree':
+      return [
+        'worktree',
+        'add',
+        ...(operation.track ? ['--track'] : []),
+        ...(operation.newBranch ? ['-b', validateToken(operation.newBranch, 'branch name')] : []),
+        '--',
+        validWorktreePath(operation.path),
+        validateToken(operation.ref, 'revision'),
+      ];
+    case 'removeWorktree':
+      return ['worktree', 'remove', ...(operation.force ? ['--force'] : []), '--', validWorktreePath(operation.path)];
+    case 'pruneWorktrees':
+      return ['worktree', 'prune'];
     case 'fetch':
       return operation.remote
         ? ['fetch', validateToken(operation.remote, 'remote')]
@@ -425,6 +461,21 @@ export function getOperationConfirmation(
       confirmLabel: 'Remove Remote',
       destructive: true,
     };
+  }
+  if (operation.kind === 'removeWorktree') {
+    return operation.force
+      ? {
+          title: 'Delete the worktree with its uncommitted changes?',
+          detail: `${operation.path} has modified or untracked files. They will be deleted with the folder and cannot be recovered.`,
+          confirmLabel: 'Delete Anyway',
+          destructive: true,
+        }
+      : {
+          title: 'Remove this worktree?',
+          detail: `The folder ${operation.path} will be deleted. Its branch and commits stay in the repository. A window that has it open will lose its files.`,
+          confirmLabel: 'Remove Worktree',
+          destructive: true,
+        };
   }
   if (operation.kind === 'dropStash') {
     return {
@@ -1041,6 +1092,12 @@ export class GitOperationService {
       await run(args);
       return { message: `${operation.kind} completed.` };
     } catch (error) {
+      const elsewhere =
+        error instanceof GitCommandError ? parseBranchInOtherWorktree(error.stderr.toString('utf8')) : undefined;
+      if (elsewhere && options.resolveBranchInOtherWorktree) {
+        await options.resolveBranchInOtherWorktree(elsewhere.branch, elsewhere.path);
+        return { message: '', cancelled: true };
+      }
       const conflict =
         error instanceof GitCommandError ? parseCheckoutConflict(error.stderr.toString('utf8')) : undefined;
       if (!conflict || !options.resolveCheckoutConflict) throw error;

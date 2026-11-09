@@ -1658,6 +1658,7 @@ describe('WorkbenchController', () => {
     );
     const fakeService = {
       getRefs: () => Promise.resolve([]),
+      getWorktrees: () => Promise.resolve([]),
       getLog,
       getCommitDetails: (_cwd: string, hash: string) => {
         const commit = commits.find((candidate) => candidate.hash === hash);
@@ -1791,6 +1792,7 @@ describe('WorkbenchController', () => {
     const staleCommit = commit('stale result', 'c');
     const fakeService = {
       getRefs: () => Promise.resolve([]),
+      getWorktrees: () => Promise.resolve([]),
       getLog: (_cwd: string, query: LogQuery) => {
         if (query.filters?.text === 'slow') {
           slowStarted?.();
@@ -1882,6 +1884,7 @@ describe('WorkbenchController', () => {
     );
     const fakeService = {
       getRefs: () => Promise.resolve([]),
+      getWorktrees: () => Promise.resolve([]),
       getLog,
       getCommitDetails: () => {
         detailsStarted?.();
@@ -2502,7 +2505,7 @@ describe('WorkbenchController', () => {
     const messages: ExtensionToWebviewMessage[] = [];
     const controller = new (await import('../../src/webview/WorkbenchController')).WorkbenchController({
       workspaceRoots: [repository],
-      gitService: { getRefs: vi.fn().mockResolvedValue([]), getLog } as unknown as GitService,
+      gitService: { getWorktrees: vi.fn().mockResolvedValue([]), getRefs: vi.fn().mockResolvedValue([]), getLog } as unknown as GitService,
       gitRunner: runner,
       scanDepth: 0,
       initialPageSize: 2,
@@ -2556,7 +2559,7 @@ describe('WorkbenchController', () => {
     const messages: ExtensionToWebviewMessage[] = [];
     const controller = new (await import('../../src/webview/WorkbenchController')).WorkbenchController({
       workspaceRoots: [repository],
-      gitService: { getRefs: vi.fn().mockResolvedValue([]), getLog } as unknown as GitService,
+      gitService: { getWorktrees: vi.fn().mockResolvedValue([]), getRefs: vi.fn().mockResolvedValue([]), getLog } as unknown as GitService,
       gitRunner: new GitRunner(),
       scanDepth: 0,
       initialPageSize: 3,
@@ -3390,7 +3393,7 @@ describe('WorkbenchController', () => {
     });
     const controller = new (await import('../../src/webview/WorkbenchController')).WorkbenchController({
       workspaceRoots: [],
-      gitService: { getRefs: vi.fn().mockResolvedValue([]) } as unknown as GitService,
+      gitService: { getWorktrees: vi.fn().mockResolvedValue([]), getRefs: vi.fn().mockResolvedValue([]) } as unknown as GitService,
       fileHistoryService: {
         resolveHeadLineRange,
         getLineHistory,
@@ -3454,7 +3457,7 @@ describe('WorkbenchController', () => {
     const messages: ExtensionToWebviewMessage[] = [];
     const controller = new (await import('../../src/webview/WorkbenchController')).WorkbenchController({
       workspaceRoots: [],
-      gitService: { getRefs: vi.fn().mockResolvedValue([]) } as unknown as GitService,
+      gitService: { getWorktrees: vi.fn().mockResolvedValue([]), getRefs: vi.fn().mockResolvedValue([]) } as unknown as GitService,
       fileHistoryService: {
         resolveHeadLineRange: vi.fn().mockResolvedValue({
           status: 'file-not-in-head',
@@ -3503,7 +3506,7 @@ describe('WorkbenchController', () => {
     const messages: ExtensionToWebviewMessage[] = [];
     const controller = new (await import('../../src/webview/WorkbenchController')).WorkbenchController({
       workspaceRoots: [],
-      gitService: { getRefs: vi.fn().mockResolvedValue([]) } as unknown as GitService,
+      gitService: { getWorktrees: vi.fn().mockResolvedValue([]), getRefs: vi.fn().mockResolvedValue([]) } as unknown as GitService,
       fileHistoryService: {
         resolveHeadLineRange: vi.fn().mockRejectedValue(
           new GitCommandError(
@@ -3571,7 +3574,7 @@ describe('WorkbenchController', () => {
     const controller = new (await import('../../src/webview/WorkbenchController')).WorkbenchController({
       workspaceRoots: [],
       gitService: {
-        getRefs: vi.fn().mockResolvedValue([]),
+        getWorktrees: vi.fn().mockResolvedValue([]), getRefs: vi.fn().mockResolvedValue([]),
         getChangedFiles,
       } as unknown as GitService,
       fileHistoryService: {
@@ -3637,7 +3640,7 @@ describe('WorkbenchController', () => {
     const controller = new (await import('../../src/webview/WorkbenchController')).WorkbenchController({
       workspaceRoots: [],
       gitService: {
-        getRefs: vi.fn().mockResolvedValue([]),
+        getWorktrees: vi.fn().mockResolvedValue([]), getRefs: vi.fn().mockResolvedValue([]),
         getChangedFiles,
       } as unknown as GitService,
       fileHistoryService: {
@@ -3700,7 +3703,7 @@ describe('WorkbenchController', () => {
     const controller = new (await import('../../src/webview/WorkbenchController')).WorkbenchController({
       workspaceRoots: [],
       gitService: {
-        getRefs: vi.fn().mockResolvedValue([]),
+        getWorktrees: vi.fn().mockResolvedValue([]), getRefs: vi.fn().mockResolvedValue([]),
         getChangedFiles,
       } as unknown as GitService,
       fileHistoryService: {
@@ -3779,7 +3782,7 @@ describe('WorkbenchController', () => {
     const invalidate = vi.fn();
     const controller = new (await import('../../src/webview/WorkbenchController')).WorkbenchController({
       workspaceRoots: [],
-      gitService: { getRefs: vi.fn().mockResolvedValue([]) } as unknown as GitService,
+      gitService: { getWorktrees: vi.fn().mockResolvedValue([]), getRefs: vi.fn().mockResolvedValue([]) } as unknown as GitService,
       fileHistoryService: { getFileHistory, invalidate } as unknown as FileHistoryService,
       gitRunner: {} as GitRunner,
       scanDepth: 0,
@@ -3840,7 +3843,7 @@ describe('WorkbenchController', () => {
     );
     const controller = new (await import('../../src/webview/WorkbenchController')).WorkbenchController({
       workspaceRoots: [],
-      gitService: { getRefs: vi.fn().mockResolvedValue([]) } as unknown as GitService,
+      gitService: { getWorktrees: vi.fn().mockResolvedValue([]), getRefs: vi.fn().mockResolvedValue([]) } as unknown as GitService,
       fileHistoryService: { getFileHistory } as unknown as FileHistoryService,
       gitRunner: {} as GitRunner,
       scanDepth: 0,
@@ -3888,7 +3891,7 @@ describe('WorkbenchController', () => {
     const messages: ExtensionToWebviewMessage[] = [];
     const controller = new (await import('../../src/webview/WorkbenchController')).WorkbenchController({
       workspaceRoots: [],
-      gitService: { getRefs: vi.fn().mockResolvedValue([]) } as unknown as GitService,
+      gitService: { getWorktrees: vi.fn().mockResolvedValue([]), getRefs: vi.fn().mockResolvedValue([]) } as unknown as GitService,
       fileHistoryService: { getFileHistory } as unknown as FileHistoryService,
       gitRunner: {} as GitRunner,
       scanDepth: 0,

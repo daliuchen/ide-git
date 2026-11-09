@@ -113,5 +113,14 @@ export async function runWorkbenchCommand(
     case 'manageRemotes':
       await vscode.commands.executeCommand('gitLogWorkbench.manageRemotes', repository.rootUri);
       return;
+    case 'manageWorktrees':
+      await vscode.commands.executeCommand('gitLogWorkbench.manageWorktrees', repository.rootUri);
+      return;
+    case 'newWorktree':
+      await vscode.commands.executeCommand('gitLogWorkbench.newWorktree', repository.rootUri, command.ref);
+      return;
+    case 'worktreeAction':
+      await vscode.commands.executeCommand('gitLogWorkbench.worktreeAction', repository.rootUri, command.path, command.action);
+      return;
   }
 }

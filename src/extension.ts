@@ -44,6 +44,7 @@ import { registerExtension } from './registerExtension';
 import { RepositoryRegistry } from './repositories/RepositoryRegistry';
 import { BranchStatusBar } from './statusBar/BranchStatusBar';
 import { RemotesManager } from './remotes/RemotesManager';
+import { isWorktreeAction, WorktreesManager } from './worktrees/WorktreesManager';
 import { WorkbenchViewProvider } from './webview/WorkbenchPanel';
 import { CommitViewProvider } from './commit/CommitViewProvider';
 import { BranchesPopup } from './branches/BranchesPopup';
@@ -577,6 +578,27 @@ export function activate(context: vscode.ExtensionContext): void {
     const repository = await resolveRepository(resource);
     if (repository) await remotesManager.show(repository);
   });
+  const worktreesManager = new WorktreesManager(runner, operationService);
+  const manageWorktreesCommand = vscode.commands.registerCommand('gitLogWorkbench.manageWorktrees', async (resource?: unknown) => {
+    const repository = await resolveRepository(resource);
+    if (repository) await worktreesManager.show(repository);
+  });
+  const newWorktreeCommand = vscode.commands.registerCommand(
+    'gitLogWorkbench.newWorktree',
+    async (resource?: unknown, startPoint?: unknown) => {
+      const repository = await resolveRepository(resource);
+      if (repository) await worktreesManager.create(repository, typeof startPoint === 'string' ? startPoint : undefined);
+    },
+  );
+  const worktreeActionCommand = vscode.commands.registerCommand(
+    'gitLogWorkbench.worktreeAction',
+    async (resource?: unknown, path?: unknown, action?: unknown) => {
+      const repository = await resolveRepository(resource);
+      if (repository && typeof path === 'string' && isWorktreeAction(action)) {
+        await worktreesManager.runAction(repository, path, action);
+      }
+    },
+  );
   const branchesCommand = vscode.commands.registerCommand('gitLogWorkbench.branches', async (resource?: unknown) => {
     const repository = await resolveRepository(resource);
     if (repository) await branchesPopup.show(repository);
@@ -739,6 +761,9 @@ export function activate(context: vscode.ExtensionContext): void {
     branchesCommand,
     mergeCommand,
     manageRemotesCommand,
+    manageWorktreesCommand,
+    newWorktreeCommand,
+    worktreeActionCommand,
     compareWithLocalCommand,
     pushCommand,
     updateProjectCommand,
