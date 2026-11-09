@@ -839,10 +839,59 @@ select:focus-visible,
   background: var(--vscode-list-hoverBackground);
 }
 
-.worktree-option.current {
+.worktree-row {
+  display: flex;
+  align-items: center;
+  border-radius: 3px;
+}
+
+.worktree-row:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.worktree-row > .worktree-option {
+  flex: 1;
+  min-width: 0;
+}
+
+.worktree-row > .worktree-option:hover {
+  background: transparent;
+}
+
+.worktree-row.current > .worktree-option {
   color: var(--vscode-gitDecoration-addedResourceForeground);
   font-weight: 600;
   cursor: default;
+}
+
+.worktree-more {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  margin-right: 2px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.worktree-row:hover > .worktree-more,
+.worktree-more:focus-visible {
+  opacity: 1;
+}
+
+.worktree-more:hover {
+  background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground));
+  color: var(--vscode-foreground);
+}
+
+.worktree-actions-heading {
+  font-weight: 600;
 }
 
 .worktree-name {

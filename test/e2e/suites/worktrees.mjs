@@ -78,6 +78,8 @@ export default {
     await openList();
     await popup.locator('.worktree-option', { hasText: 'feat/x' }).click({ button: 'right' });
     await sleep(500);
+    check('right-click keeps the list open with its actions', (await popup.getByRole('menu', { name: 'Actions for feat/x' }).count()) === 1);
+    await shot('actions');
     await log.getByRole('menuitem', { name: 'Remove Worktree…' }).click();
     await sleep(800);
     await page.locator('.monaco-dialog-box').getByRole('button', { name: 'Remove Worktree' }).click();

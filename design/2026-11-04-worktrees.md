@@ -50,7 +50,7 @@ Manage Worktrees — ide-git
 
 ### Log 工具栏的 Worktree 下拉（用户追加）
 
-Log 顶部筛选栏 Branch / User / Date / Paths 后面加 **Worktree: <当前分支> ▾**（多于一个时带数量），一直显示，方便发现。点开列出全部 worktree（分支 + 目录名，悬停看完整路径），**单击就把窗口切过去**，右键是上面那些操作；底部 New Worktree… 和 Manage Worktrees…。
+Log 顶部筛选栏 Branch / User / Date / Paths 后面加 **Worktree: <当前分支> ▾**（多于一个时带数量），一直显示，方便发现。点开列出全部 worktree（分支 + 目录名，悬停看完整路径），**单击就把窗口切过去**；右键或行尾 `⋯` 在下拉里原地换成这个 worktree 的操作（顶部写着分支和完整路径，← 返回列表）；底部 New Worktree… 和 Manage Worktrees…。
 
 ### New Worktree…
 
@@ -104,10 +104,11 @@ Log 顶部筛选栏 Branch / User / Date / Paths 后面加 **Worktree: <当前�
 - **默认操作改成 Switch to This Worktree**：方案确认时用户追加，上面已写进方案。
 - **Log 里的位置**：第一版放在左侧分支列表最底下的 Worktrees 分组（双击切换），用户试用后觉得太靠下不好找，改成工具栏 Paths 旁边的 Worktree 下拉，分组去掉。
 - **删除后 Log 不刷新（试用时发现）**：Git 删除 worktree 是整个删掉 `.git/worktrees/<名>/`，里面文件的删除事件不一定报上来，Log 一直显示已删的那行。修法：监听再加 `worktrees/*` 目录本身；Manage Worktrees 每次新建、删除、清理成功后直接通知 Log 刷新（`WorkbenchViewProvider.notifyRepositoryChanged`），不只靠监听。e2e 加了「删除后 Log 里消失」这一项。
+- **右键时下拉消失（试用时发现）**：第一版右键会先关掉下拉、再弹一个独立的右键菜单，看不出右键的是哪个 worktree；而界面规范要求同一时间只显示一个弹出层。改为在下拉里原地显示这个 worktree 的操作（`WorktreePopup` 组件），行尾加 `⋯` 按钮做同样的事。
 - **分支占用不靠 `%(worktreepath)`**：Log 和 Branches 都直接用 `git worktree list --porcelain` 的结果（Log 每次完整加载时随 `repositoryData.worktrees` 一起发），一个来源，不用改 `parseRefs` 的字段。
 - **Checkout 被占用的分支**：不在 checkout 前预先查询，而是在 Git 报 `is already used by worktree at` / `is already checked out at`（两种版本的措辞）时交给 `GitOperationRunOptions.resolveBranchInOtherWorktree`，弹框 Switch to Worktree / Open in New Window。Log 和 Branches 里被占用的分支本来就不显示 Checkout，改为 **Switch to Its Worktree**。
 - **webview 不能直接删 worktree**：Log 只发 `worktreeAction { path, action }`，扩展端重新列一遍、确认路径确实是这个仓库的 worktree 才执行；`addWorktree` / `removeWorktree` / `pruneWorktrees` 不在 webview 的 `runOperation` 白名单里。
 - **自动刷新**：监听公共 git 目录的 `worktrees/*` 和 `worktrees/*/HEAD`（新建、删除、别的 worktree 切分支），在终端里建的 worktree 也会出现在 Log 里。
 - **新建后的通知按钮用短文字**（Switch / New Window / Add to Workspace），长文字在通知里会被截断。
 - 目录不存在但 Git 版本太旧不报 `prunable` 时，Manage Worktrees 自己检查目录是否存在。
-- 验证：单测（解析、路径、错误识别、协议校验、Log 工具栏下拉的单击切换/右键/新建/管理和分支标记）；真实临时仓库（从本地/新/远程分支建，路径带空格和中文；被占用分支 checkout 交给回调；干净的直接删、有改动的第一次被拒、force 成功、分支保留；不确认不删；prune；非法输入在执行前拒绝；rebase 进行中能建）；e2e `worktrees` 10 项（命令面板新建 → 工具栏下拉和分支标记 → 右键菜单 → 确认后删除、Log 里随即消失 → 终端新建的出现 → 在下拉里点它把窗口切过去）。
+- 验证：单测（解析、路径、错误识别、协议校验、Log 工具栏下拉的单击切换/右键/新建/管理和分支标记）；真实临时仓库（从本地/新/远程分支建，路径带空格和中文；被占用分支 checkout 交给回调；干净的直接删、有改动的第一次被拒、force 成功、分支保留；不确认不删；prune；非法输入在执行前拒绝；rebase 进行中能建）；e2e `worktrees` 11 项（命令面板新建 → 工具栏下拉和分支标记 → 分支右键菜单 → 下拉里右键保持打开并显示操作 → 确认后删除、Log 里随即消失 → 终端新建的出现 → 在下拉里点它把窗口切过去）。

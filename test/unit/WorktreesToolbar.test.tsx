@@ -111,14 +111,32 @@ describe('Worktrees in the Log', () => {
     posted.length = 0;
     fireEvent.click(screen.getByRole('button', { name: 'Worktree: main' }));
     popup = screen.getByRole('dialog', { name: 'Worktrees' });
+    // Right-click keeps the dropdown open and shows that worktree's actions in it.
     fireEvent.contextMenu(within(popup).getByText('feat/x'));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove Worktree…' }));
+    popup = screen.getByRole('dialog', { name: 'Worktrees' });
+    expect(within(popup).getByRole('menu', { name: 'Actions for feat/x' })).toBeInTheDocument();
+    expect(within(popup).getByText('~/app-feat-x')).toBeInTheDocument();
+    fireEvent.click(within(popup).getByRole('button', { name: 'Back to worktrees' }));
+    expect(within(popup).getByText('app-feat-x')).toBeInTheDocument();
+    // The ⋯ button does the same.
+    fireEvent.click(within(popup).getByRole('button', { name: 'More actions for feat/x' }));
+    fireEvent.click(within(popup).getByRole('menuitem', { name: 'Remove Worktree…' }));
     expect(commands()).toEqual([{ kind: 'worktreeAction', path: '/Users/me/app-feat-x', action: 'remove' }]);
 
     posted.length = 0;
     fireEvent.click(screen.getByRole('button', { name: 'Worktree: main' }));
     fireEvent.click(within(screen.getByRole('dialog', { name: 'Worktrees' })).getByRole('button', { name: /Manage Worktrees/u }));
     expect(commands()).toEqual([{ kind: 'manageWorktrees' }]);
+  });
+
+  it('offers no Remove for the current worktree', () => {
+    show([worktree('/Users/me/app', 'main', { isMain: true, isCurrent: true }), worktree('/Users/me/app-feat-x', 'feat/x')]);
+    fireEvent.click(screen.getByRole('button', { name: 'Worktree: main' }));
+    fireEvent.contextMenu(within(screen.getByRole('dialog', { name: 'Worktrees' })).getByText('main'));
+    const actions = screen.getByRole('menu', { name: 'Actions for main' });
+    expect(within(actions).queryByRole('menuitem', { name: 'Remove Worktree…' })).not.toBeInTheDocument();
+    expect(within(actions).queryByRole('menuitem', { name: 'Switch to This Worktree' })).not.toBeInTheDocument();
+    expect(within(actions).getByRole('menuitem', { name: 'Copy Path' })).toBeInTheDocument();
   });
 
   it('marks a branch used by another worktree and switches instead of checking out', () => {
