@@ -83,60 +83,38 @@ const commands = () =>
   posted.flatMap((message) => (message.type === 'workbenchCommand' ? [message.command] : []));
 
 describe('Worktrees in the Log', () => {
-  it('shows the current worktree in the toolbar, even when it is the only one', () => {
+  it('is hidden while the repository has a single worktree', () => {
     show([worktree('/Users/me/app', 'main', { isMain: true, isCurrent: true })]);
-    fireEvent.click(screen.getByRole('button', { name: 'Worktree: main' }));
-    const popup = screen.getByRole('dialog', { name: 'Worktrees' });
-    fireEvent.click(within(popup).getByRole('button', { name: /New Worktree/u }));
-    expect(commands()).toEqual([{ kind: 'newWorktree' }]);
+    expect(screen.queryByRole('region', { name: 'Worktrees' })).not.toBeInTheDocument();
   });
 
-  it('switches from the toolbar list and offers actions on right-click', () => {
+  it('lists worktrees, switches on double-click and offers actions on right-click', () => {
     show([
       worktree('/Users/me/app', 'main', { isMain: true, isCurrent: true }),
       worktree('/Users/me/app-feat-x', 'feat/x'),
       worktree('/Users/me/gone', 'old', { prunable: 'gitdir file points to non-existent location' }),
     ]);
-    fireEvent.click(screen.getByRole('button', { name: 'Worktree: main' }));
-    let popup = screen.getByRole('dialog', { name: 'Worktrees' });
-    expect(within(popup).getByText('app-feat-x')).toBeInTheDocument();
-    expect(within(popup).queryByRole('button', { name: 'Reset filters' })).not.toBeInTheDocument();
-    // The current and the stale worktree do nothing on click.
-    fireEvent.click(within(popup).getByText('main'));
-    fireEvent.click(within(popup).getByText('old'));
-    fireEvent.click(within(popup).getByText('feat/x'));
+    const section = screen.getByRole('region', { name: 'Worktrees' });
+    expect(within(section).getByText('app-feat-x')).toBeInTheDocument();
+
+    fireEvent.doubleClick(within(section).getByText('feat/x'));
+    // The current worktree does nothing on double-click.
+    fireEvent.doubleClick(within(section).getByText('main'));
     expect(commands()).toEqual([{ kind: 'worktreeAction', path: '/Users/me/app-feat-x', action: 'switch' }]);
-    expect(screen.queryByRole('dialog', { name: 'Worktrees' })).not.toBeInTheDocument();
 
     posted.length = 0;
-    fireEvent.click(screen.getByRole('button', { name: 'Worktree: main' }));
-    popup = screen.getByRole('dialog', { name: 'Worktrees' });
-    // Right-click keeps the dropdown open and shows that worktree's actions in it.
-    fireEvent.contextMenu(within(popup).getByText('feat/x'));
-    popup = screen.getByRole('dialog', { name: 'Worktrees' });
-    expect(within(popup).getByRole('menu', { name: 'Actions for feat/x' })).toBeInTheDocument();
-    expect(within(popup).getByText('~/app-feat-x')).toBeInTheDocument();
-    fireEvent.click(within(popup).getByRole('button', { name: 'Back to worktrees' }));
-    expect(within(popup).getByText('app-feat-x')).toBeInTheDocument();
-    // The ⋯ button does the same.
-    fireEvent.click(within(popup).getByRole('button', { name: 'More actions for feat/x' }));
-    fireEvent.click(within(popup).getByRole('menuitem', { name: 'Remove Worktree…' }));
+    fireEvent.contextMenu(within(section).getByText('feat/x'));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove Worktree…' }));
     expect(commands()).toEqual([{ kind: 'worktreeAction', path: '/Users/me/app-feat-x', action: 'remove' }]);
 
-    posted.length = 0;
-    fireEvent.click(screen.getByRole('button', { name: 'Worktree: main' }));
-    fireEvent.click(within(screen.getByRole('dialog', { name: 'Worktrees' })).getByRole('button', { name: /Manage Worktrees/u }));
-    expect(commands()).toEqual([{ kind: 'manageWorktrees' }]);
-  });
+    fireEvent.contextMenu(within(section).getByText('main'));
+    expect(screen.queryByRole('menuitem', { name: 'Remove Worktree…' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Switch to This Worktree' })).not.toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
 
-  it('offers no Remove for the current worktree', () => {
-    show([worktree('/Users/me/app', 'main', { isMain: true, isCurrent: true }), worktree('/Users/me/app-feat-x', 'feat/x')]);
-    fireEvent.click(screen.getByRole('button', { name: 'Worktree: main' }));
-    fireEvent.contextMenu(within(screen.getByRole('dialog', { name: 'Worktrees' })).getByText('main'));
-    const actions = screen.getByRole('menu', { name: 'Actions for main' });
-    expect(within(actions).queryByRole('menuitem', { name: 'Remove Worktree…' })).not.toBeInTheDocument();
-    expect(within(actions).queryByRole('menuitem', { name: 'Switch to This Worktree' })).not.toBeInTheDocument();
-    expect(within(actions).getByRole('menuitem', { name: 'Copy Path' })).toBeInTheDocument();
+    posted.length = 0;
+    fireEvent.click(within(section).getByRole('button', { name: 'Manage worktrees' }));
+    expect(commands()).toEqual([{ kind: 'manageWorktrees' }]);
   });
 
   it('marks a branch used by another worktree and switches instead of checking out', () => {

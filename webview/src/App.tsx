@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -490,159 +491,6 @@ function RefTreeNodes({
   });
 }
 
-type WorktreeAction = Extract<WorkbenchCommand, { kind: 'worktreeAction' }>['action'];
-
-/** The Worktree dropdown: the list, or one worktree's actions in its place (one popup at a time). */
-function WorktreePopup({
-  worktrees,
-  actionsPath,
-  showActions,
-  onAction,
-  onCommand,
-}: {
-  worktrees: readonly WorktreeInfo[];
-  actionsPath: string | undefined;
-  showActions(path: string | undefined): void;
-  onAction(path: string, action: WorktreeAction): void;
-  onCommand(command: Extract<WorkbenchCommand, { kind: 'newWorktree' | 'manageWorktrees' }>): void;
-}) {
-  const chosen = worktrees.find((worktree) => worktree.path === actionsPath);
-  const act = onAction;
-  if (chosen) {
-    const canOpen = !chosen.isCurrent && !chosen.bare && !chosen.prunable;
-    const canRemove = !chosen.isMain && !chosen.isCurrent && !chosen.bare && !chosen.prunable;
-    return (
-      <div className="worktree-list" role="menu" aria-label={`Actions for ${worktreeLabel(chosen)}`}>
-        <button
-          type="button"
-          className="worktree-option worktree-actions-heading"
-          aria-label="Back to worktrees"
-          title={chosen.path}
-          onClick={() => showActions(undefined)}
-        >
-          <i className="codicon codicon-arrow-left" aria-hidden="true" />
-          <span className="worktree-name">{worktreeLabel(chosen)}</span>
-          <span className="worktree-path">{chosen.displayPath}</span>
-        </button>
-        <div className="context-menu-separator" role="separator" />
-        {canOpen
-          ? (
-              [
-                ['switch', 'arrow-swap', 'Switch to This Worktree'],
-                ['newWindow', 'empty-window', 'Open in New Window'],
-                ['addToWorkspace', 'root-folder', 'Add to Workspace'],
-              ] as const
-            ).map(([action, icon, label]) => (
-              <button type="button" role="menuitem" className="worktree-option" key={action} onClick={() => act(chosen.path, action)}>
-                <i className={`codicon codicon-${icon}`} aria-hidden="true" />
-                <span className="worktree-name">{label}</span>
-              </button>
-            ))
-          : null}
-        {!chosen.prunable ? (
-          <button type="button" role="menuitem" className="worktree-option" onClick={() => act(chosen.path, 'reveal')}>
-            <i className="codicon codicon-folder-opened" aria-hidden="true" />
-            <span className="worktree-name">Reveal in File Manager</span>
-          </button>
-        ) : null}
-        <button type="button" role="menuitem" className="worktree-option" onClick={() => act(chosen.path, 'copyPath')}>
-          <i className="codicon codicon-copy" aria-hidden="true" />
-          <span className="worktree-name">Copy Path</span>
-        </button>
-        {chosen.prunable ? (
-          <button
-            type="button"
-            role="menuitem"
-            className="worktree-option"
-            onClick={() => onCommand({ kind: 'manageWorktrees' })}
-          >
-            <i className="codicon codicon-trash" aria-hidden="true" />
-            <span className="worktree-name">Prune Stale Worktrees…</span>
-          </button>
-        ) : null}
-        {canRemove ? (
-          <>
-            <div className="context-menu-separator" role="separator" />
-            <button type="button" role="menuitem" className="worktree-option" onClick={() => act(chosen.path, 'remove')}>
-              <i className="codicon codicon-trash" aria-hidden="true" />
-              <span className="worktree-name">Remove Worktree…</span>
-            </button>
-          </>
-        ) : null}
-      </div>
-    );
-  }
-  return (
-    <div className="worktree-list">
-      {worktrees.map((worktree) => {
-        const canOpen = !worktree.isCurrent && !worktree.bare && !worktree.prunable;
-        return (
-          <div
-            key={worktree.path}
-            className={`worktree-row${worktree.isCurrent ? ' current' : ''}${worktree.prunable ? ' stale-worktree' : ''}`}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              showActions(worktree.path);
-            }}
-          >
-            <button
-              type="button"
-              className="worktree-option"
-              aria-current={worktree.isCurrent ? 'true' : undefined}
-              title={[
-                worktree.path,
-                worktree.isCurrent ? 'This window' : canOpen ? 'Switch this window to it' : '',
-                worktree.prunable ? `Stale: ${worktree.prunable}` : '',
-                worktree.locked !== undefined ? `Locked${worktree.locked ? `: ${worktree.locked}` : ''}` : '',
-              ]
-                .filter(Boolean)
-                .join('\n')}
-              onClick={() => {
-                if (canOpen) act(worktree.path, 'switch');
-              }}
-            >
-              <i
-                className={`codicon codicon-${worktree.isCurrent ? 'check' : worktree.prunable ? 'warning' : 'folder'}`}
-                aria-hidden="true"
-              />
-              <span className="worktree-name">{worktreeLabel(worktree)}</span>
-              <span className="worktree-path">
-                {worktree.displayPath.split(/[\\/]/u).filter(Boolean).at(-1) ?? worktree.displayPath}
-              </span>
-            </button>
-            <button
-              type="button"
-              className="worktree-more"
-              aria-label={`More actions for ${worktreeLabel(worktree)}`}
-              title="More actions (or right-click)"
-              onClick={() => showActions(worktree.path)}
-            >
-              <i className="codicon codicon-ellipsis" aria-hidden="true" />
-            </button>
-          </div>
-        );
-      })}
-      <div className="context-menu-separator" role="separator" />
-      <button
-        type="button"
-        className="worktree-option"
-        onClick={() => onCommand({ kind: 'newWorktree' })}
-      >
-        <i className="codicon codicon-add" aria-hidden="true" />
-        <span className="worktree-name">New Worktree…</span>
-      </button>
-      <button
-        type="button"
-        className="worktree-option"
-        onClick={() => onCommand({ kind: 'manageWorktrees' })}
-      >
-        <i className="codicon codicon-settings-gear" aria-hidden="true" />
-        <span className="worktree-name">Manage Worktrees…</span>
-      </button>
-    </div>
-  );
-}
-
 export function App() {
   const vscode = useMemo(() => getVsCodeApi(), []);
   const [state, setState] = useState<WorkbenchState>(initialState);
@@ -651,10 +499,8 @@ export function App() {
   const [scrollTopByRepository, setScrollTopByRepository] = useState<Record<string, number>>(() =>
     readScrollTopByRepository(vscode.getState()),
   );
-  const [filterPopup, setFilterPopup] = useState<'branch' | 'user' | 'date' | 'paths' | 'worktree' | undefined>();
+  const [filterPopup, setFilterPopup] = useState<'branch' | 'user' | 'date' | 'paths' | undefined>();
   const [filterSearch, setFilterSearch] = useState('');
-  /** The worktree whose actions the Worktree dropdown shows in place of the list. */
-  const [worktreeActionsPath, setWorktreeActionsPath] = useState<string>();
   const [filterPopoverPosition, setFilterPopoverPosition] = useState<CSSProperties | undefined>();
   const [contextMenu, setContextMenu] = useState<
     | {
@@ -668,6 +514,7 @@ export function App() {
     | { kind: 'ref'; repositoryId: string; ref: RefLabel; x: number; y: number }
     | { kind: 'file'; repositoryId: string; file: ChangedFile; x: number; y: number }
     | { kind: 'head'; repositoryId: string; hash: string; x: number; y: number }
+    | { kind: 'worktree'; repositoryId: string; worktree: WorktreeInfo; x: number; y: number }
     | undefined
   >();
   const [measuredContextMenuPosition, setMeasuredContextMenuPosition] = useState<
@@ -1946,7 +1793,6 @@ export function App() {
       ),
     [state.worktrees],
   );
-  const currentWorktree = state.worktrees.find((worktree) => worktree.isCurrent);
   const worktreeOfRef = (ref: RefLabel): WorktreeInfo | undefined =>
     ref.kind === 'local' ? worktreeByBranch.get(ref.shortName) : undefined;
   const toggleRefGroup = (group: string): void => {
@@ -2524,7 +2370,7 @@ export function App() {
             },
             { kind: 'paths', name: 'Paths', value: pathFilterValue, clear: (filters) => ({ ...filters, paths: [] }) },
           ] satisfies {
-            kind: Exclude<NonNullable<typeof filterPopup>, 'worktree'>;
+            kind: NonNullable<typeof filterPopup>;
             name: string;
             value: string;
             clear: (filters: LogFilters) => LogFilters;
@@ -2587,52 +2433,13 @@ export function App() {
             ) : null}
           </span>
         ))}
-        {currentWorktree && !selectedRepository?.isBare ? (
-          <span className="filter-chip worktree-chip">
-            <button
-              type="button"
-              data-popup-trigger="true"
-              aria-label={`Worktree: ${worktreeLabel(currentWorktree)}`}
-              aria-expanded={filterPopup === 'worktree'}
-              title={`This window shows ${currentWorktree.displayPath}. Switch to another worktree or create one.`}
-              onClick={() => {
-                setContextMenu(undefined);
-                setWorktreeActionsPath(undefined);
-                setFilterPopup((current) => (current === 'worktree' ? undefined : 'worktree'));
-              }}
-            >
-              Worktree: <strong className="filter-chip-value">{worktreeLabel(currentWorktree)}</strong>
-              {state.worktrees.length > 1 ? <span className="worktree-count">{state.worktrees.length}</span> : null}
-              <span className="filter-chip-chevron" aria-hidden="true">
-                ▾
-              </span>
-            </button>
-          </span>
-        ) : null}
         {filterPopup ? (
           <div
             className={`filter-popover filter-${filterPopup}`}
             role="dialog"
-            aria-label={filterPopup === 'worktree' ? 'Worktrees' : `${filterPopup} filter`}
+            aria-label={`${filterPopup} filter`}
             style={filterPopoverPosition}
           >
-            {filterPopup === 'worktree' ? (
-              <WorktreePopup
-                worktrees={state.worktrees}
-                actionsPath={worktreeActionsPath}
-                showActions={setWorktreeActionsPath}
-                onAction={(path, action) => {
-                  setFilterPopup(undefined);
-                  setWorktreeActionsPath(undefined);
-                  runWorkbenchCommand({ kind: 'worktreeAction', path, action });
-                }}
-                onCommand={(command) => {
-                  setFilterPopup(undefined);
-                  setWorktreeActionsPath(undefined);
-                  runWorkbenchCommand(command);
-                }}
-              />
-            ) : null}
             {filterPopup === 'branch' ? (
               <>
                 <input
@@ -2901,18 +2708,16 @@ export function App() {
                 />
               </label>
             ) : null}
-            {filterPopup !== 'worktree' ? (
-              <button
-                type="button"
-                className="reset-filters"
-                onClick={() => {
-                  applyFilters(defaultFilters);
-                  setFilterPopup(undefined);
-                }}
-              >
-                Reset filters
-              </button>
-            ) : null}
+            <button
+              type="button"
+              className="reset-filters"
+              onClick={() => {
+                applyFilters(defaultFilters);
+                setFilterPopup(undefined);
+              }}
+            >
+              Reset filters
+            </button>
           </div>
         ) : null}
       </header>
@@ -2940,6 +2745,91 @@ export function App() {
     if (!remote) return undefined;
     return { remote, branch: upstream.slice(remote.length + 1) };
   })();
+
+  // Above Tags: local work first, then where it is checked out.
+  const worktreesSection =
+    state.worktrees.length > 1 && !refSearchActive ? (
+      <section className="ref-group" aria-label="Worktrees">
+        <div className="ref-group-heading-row">
+          <button
+            type="button"
+            className="ref-group-heading"
+            aria-expanded={!collapsedRefGroups.has('worktrees')}
+            onClick={() => toggleRefGroup('worktrees')}
+          >
+            <span aria-hidden="true">{collapsedRefGroups.has('worktrees') ? '›' : '⌄'}</span>
+            <span>Worktrees</span>
+            <span className="ref-count">{state.worktrees.length}</span>
+          </button>
+          <button
+            type="button"
+            className="ref-group-action"
+            aria-label="New worktree"
+            title="New Worktree…"
+            onClick={() => runWorkbenchCommand({ kind: 'newWorktree' })}
+          >
+            <i className="codicon codicon-add" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="ref-group-action"
+            aria-label="Manage worktrees"
+            title="Manage Worktrees…"
+            onClick={() => runWorkbenchCommand({ kind: 'manageWorktrees' })}
+          >
+            <i className="codicon codicon-settings-gear" aria-hidden="true" />
+          </button>
+        </div>
+        {!collapsedRefGroups.has('worktrees')
+          ? state.worktrees.map((worktree) => {
+              const canOpen = !worktree.isCurrent && !worktree.bare && !worktree.prunable;
+              const branchRef = worktree.branch
+                ? state.refs.find((ref) => ref.fullName === `refs/heads/${worktree.branch ?? ''}`)
+                : undefined;
+              return (
+                <button
+                  type="button"
+                  key={worktree.path}
+                  className={`ref-item worktree-item${worktree.isCurrent ? ' current-ref' : ''}${worktree.prunable ? ' stale-worktree' : ''}`}
+                  title={[
+                    worktree.path,
+                    worktree.isCurrent ? 'This window' : canOpen ? 'Double-click to switch this window to it' : '',
+                    worktree.prunable ? `Stale: ${worktree.prunable}` : '',
+                    worktree.locked !== undefined ? `Locked${worktree.locked ? `: ${worktree.locked}` : ''}` : '',
+                  ]
+                    .filter(Boolean)
+                    .join('\n')}
+                  onClick={() => {
+                    if (branchRef) selectRef(branchRef);
+                  }}
+                  onDoubleClick={() => {
+                    if (canOpen) runWorkbenchCommand({ kind: 'worktreeAction', path: worktree.path, action: 'switch' });
+                  }}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    if (!state.selectedRepositoryId) return;
+                    setContextMenu({
+                      kind: 'worktree',
+                      repositoryId: state.selectedRepositoryId,
+                      worktree,
+                      x: event.clientX,
+                      y: event.clientY,
+                    });
+                  }}
+                >
+                  <span className="ref-folder-chevron" aria-hidden="true" />
+                  <i
+                    className={`codicon codicon-${worktree.isCurrent ? 'check' : worktree.prunable ? 'warning' : 'folder'} ref-icon`}
+                    aria-hidden="true"
+                  />
+                  <span className="ref-name">{worktreeLabel(worktree)}</span>
+                  <span className="worktree-path">{worktree.displayPath.split(/[\\/]/u).filter(Boolean).at(-1) ?? worktree.displayPath}</span>
+                </button>
+              );
+            })
+          : null}
+      </section>
+    ) : null;
 
   const globalToolbar = (
     <header className="global-toolbar" role="toolbar" aria-label="Global Git actions">
@@ -3368,56 +3258,59 @@ export function App() {
             {refGroupTrees.map(({ group, refs, tree }) => {
               const collapsed = !refSearchActive && collapsedRefGroups.has(group.kind);
               return (
-                <section className="ref-group" key={group.kind}>
-                  <div className="ref-group-heading-row">
-                    <button
-                      type="button"
-                      className="ref-group-heading"
-                      aria-expanded={!collapsed}
-                      disabled={refSearchActive}
-                      onClick={() => toggleRefGroup(group.kind)}
-                    >
-                      <span aria-hidden="true">{collapsed ? '›' : '⌄'}</span>
-                      <span>{group.label}</span>
-                      <span className="ref-count">{refs.length}</span>
-                    </button>
-                    {group.kind === 'remote' ? (
+                <Fragment key={group.kind}>
+                  {group.kind === 'tag' ? worktreesSection : null}
+                  <section className="ref-group">
+                    <div className="ref-group-heading-row">
                       <button
                         type="button"
-                        className="ref-group-action"
-                        aria-label="Manage remotes"
-                        title="Manage Remotes…"
-                        onClick={() => runWorkbenchCommand({ kind: 'manageRemotes' })}
+                        className="ref-group-heading"
+                        aria-expanded={!collapsed}
+                        disabled={refSearchActive}
+                        onClick={() => toggleRefGroup(group.kind)}
                       >
-                        <i className="codicon codicon-settings-gear" aria-hidden="true" />
+                        <span aria-hidden="true">{collapsed ? '›' : '⌄'}</span>
+                        <span>{group.label}</span>
+                        <span className="ref-count">{refs.length}</span>
                       </button>
+                      {group.kind === 'remote' ? (
+                        <button
+                          type="button"
+                          className="ref-group-action"
+                          aria-label="Manage remotes"
+                          title="Manage Remotes…"
+                          onClick={() => runWorkbenchCommand({ kind: 'manageRemotes' })}
+                        >
+                          <i className="codicon codicon-settings-gear" aria-hidden="true" />
+                        </button>
+                      ) : null}
+                    </div>
+                    {!collapsed ? (
+                      <RefTreeNodes
+                        nodes={tree}
+                        depth={0}
+                        group={group}
+                        folderKeyPrefix={`${state.selectedRepositoryId ?? ''}:${group.kind}`}
+                        collapsedFolders={collapsedRefFolders}
+                        forceExpanded={refSearchActive}
+                        onToggleFolder={toggleRefFolder}
+                        onSelect={selectRef}
+                        onKeyDown={handleRefKeyDown}
+                        worktreeOf={worktreeOfRef}
+                        onContextMenu={(ref, x, y) => {
+                          if (!state.selectedRepositoryId) return;
+                          setContextMenu({
+                            kind: 'ref',
+                            repositoryId: state.selectedRepositoryId,
+                            ref,
+                            x,
+                            y,
+                          });
+                        }}
+                      />
                     ) : null}
-                  </div>
-                  {!collapsed ? (
-                    <RefTreeNodes
-                      nodes={tree}
-                      depth={0}
-                      group={group}
-                      folderKeyPrefix={`${state.selectedRepositoryId ?? ''}:${group.kind}`}
-                      collapsedFolders={collapsedRefFolders}
-                      forceExpanded={refSearchActive}
-                      onToggleFolder={toggleRefFolder}
-                      onSelect={selectRef}
-                      onKeyDown={handleRefKeyDown}
-                      worktreeOf={worktreeOfRef}
-                      onContextMenu={(ref, x, y) => {
-                        if (!state.selectedRepositoryId) return;
-                        setContextMenu({
-                          kind: 'ref',
-                          repositoryId: state.selectedRepositoryId,
-                          ref,
-                          x,
-                          y,
-                        });
-                      }}
-                    />
-                  ) : null}
-                </section>
+                  </section>
+                </Fragment>
               );
             })}
           </div>
@@ -4439,6 +4332,87 @@ export function App() {
               >
                 Copy Path
               </button>
+            </>
+          ) : null}
+          {contextMenu.kind === 'worktree' ? (
+            <>
+              {!contextMenu.worktree.isCurrent && !contextMenu.worktree.bare && !contextMenu.worktree.prunable ? (
+                <>
+                  {(
+                    [
+                      ['switch', 'Switch to This Worktree'],
+                      ['newWindow', 'Open in New Window'],
+                      ['addToWorkspace', 'Add to Workspace'],
+                    ] as const
+                  ).map(([action, label]) => (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      key={action}
+                      onClick={() =>
+                        runWorkbenchCommand(
+                          { kind: 'worktreeAction', path: contextMenu.worktree.path, action },
+                          contextMenu.repositoryId,
+                        )
+                      }
+                    >
+                      {label}
+                    </button>
+                  ))}
+                  <div className="context-menu-separator" role="separator" />
+                </>
+              ) : null}
+              {!contextMenu.worktree.prunable ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() =>
+                    runWorkbenchCommand(
+                      { kind: 'worktreeAction', path: contextMenu.worktree.path, action: 'reveal' },
+                      contextMenu.repositoryId,
+                    )
+                  }
+                >
+                  Reveal in File Manager
+                </button>
+              ) : null}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() =>
+                  runWorkbenchCommand(
+                    { kind: 'worktreeAction', path: contextMenu.worktree.path, action: 'copyPath' },
+                    contextMenu.repositoryId,
+                  )
+                }
+              >
+                Copy Path
+              </button>
+              {contextMenu.worktree.prunable ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => runWorkbenchCommand({ kind: 'manageWorktrees' }, contextMenu.repositoryId)}
+                >
+                  Prune Stale Worktrees…
+                </button>
+              ) : !contextMenu.worktree.isMain && !contextMenu.worktree.isCurrent && !contextMenu.worktree.bare ? (
+                <>
+                  <div className="context-menu-separator" role="separator" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() =>
+                      runWorkbenchCommand(
+                        { kind: 'worktreeAction', path: contextMenu.worktree.path, action: 'remove' },
+                        contextMenu.repositoryId,
+                      )
+                    }
+                  >
+                    Remove Worktree…
+                  </button>
+                </>
+              ) : null}
             </>
           ) : null}
           {contextMenu.kind === 'ref' ? (

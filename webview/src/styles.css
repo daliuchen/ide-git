@@ -805,101 +805,13 @@ select:focus-visible,
   font-size: 12px;
 }
 
-.worktree-count {
-  margin-left: 4px;
-  padding: 0 5px;
-  border-radius: 8px;
-  background: var(--vscode-badge-background);
-  color: var(--vscode-badge-foreground);
-  font-size: 10px;
+.worktree-item .codicon.ref-icon {
+  font-size: 13px;
 }
 
-.worktree-list {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 2px;
-}
-
-.worktree-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-height: 26px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 3px;
-  background: transparent;
-  color: var(--vscode-foreground);
-  text-align: left;
-  cursor: pointer;
-}
-
-.worktree-option:hover {
-  background: var(--vscode-list-hoverBackground);
-}
-
-.worktree-row {
-  display: flex;
-  align-items: center;
-  border-radius: 3px;
-}
-
-.worktree-row:hover {
-  background: var(--vscode-list-hoverBackground);
-}
-
-.worktree-row > .worktree-option {
-  flex: 1;
-  min-width: 0;
-}
-
-.worktree-row > .worktree-option:hover {
-  background: transparent;
-}
-
-.worktree-row.current > .worktree-option {
-  color: var(--vscode-gitDecoration-addedResourceForeground);
-  font-weight: 600;
-  cursor: default;
-}
-
-.worktree-more {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 22px;
-  margin-right: 2px;
-  border: 0;
-  border-radius: 3px;
-  background: transparent;
-  color: var(--vscode-descriptionForeground);
-  cursor: pointer;
-  opacity: 0;
-}
-
-.worktree-row:hover > .worktree-more,
-.worktree-more:focus-visible {
-  opacity: 1;
-}
-
-.worktree-more:hover {
-  background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground));
-  color: var(--vscode-foreground);
-}
-
-.worktree-actions-heading {
-  font-weight: 600;
-}
-
-.worktree-name {
+.worktree-item .ref-name {
   flex: 0 1 auto;
   min-width: 3ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .worktree-path {
@@ -909,12 +821,11 @@ select:focus-visible,
   overflow: hidden;
   color: var(--vscode-descriptionForeground);
   font-size: 11px;
-  font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.stale-worktree .worktree-name {
+.stale-worktree .ref-name {
   color: var(--vscode-descriptionForeground);
   text-decoration: line-through;
 }

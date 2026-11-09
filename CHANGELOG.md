@@ -5,7 +5,7 @@ All notable changes to IDE Git are documented in this file.
 ## 0.13.0
 
 - Worktrees: `IDE Git: Manage Worktrees…` lists the repository's worktrees and creates one for a local, remote or new branch (in a folder next to the repository by default), switches this window to it, opens it in a new window, adds it to the workspace, reveals it or removes it. A worktree with uncommitted changes is only deleted after a second confirmation; stale entries can be pruned.
-- The Log's toolbar shows **Worktree: <branch> ▾** next to the filters: pick a worktree to switch this window to it, right-click it (or use ⋯) to see its other actions in the same list, or create one; **New Worktree from Here…** on any branch.
+- The Log's branch list has a **Worktrees** group above Tags: click a worktree to show its branch in the Log, double-click to switch this window to it, right-click for the other actions; **New Worktree from Here…** on any branch.
 - A branch checked out in another worktree is marked in the Log and in Branches; instead of Git's error, Checkout offers to switch to that worktree.
 
 ## 0.12.1
