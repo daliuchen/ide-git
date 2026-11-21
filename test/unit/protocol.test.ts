@@ -129,6 +129,16 @@ describe('parseWebviewMessage', () => {
     ).toBeUndefined();
     expect(request({ kind: 'squashCommits', hashes, message: '\0unsafe' })).toBeUndefined();
     expect(request({ kind: 'squashCommits', hashes, message: 'x'.repeat(100_001) })).toBeUndefined();
+    for (const kind of ['cherryPickCommits', 'revertCommits']) {
+      expect(request({ kind, hashes })).toBeDefined();
+      expect(request({ kind, hashes: [hashes[0]] })).toBeDefined();
+      expect(request({ kind, hashes: [] })).toBeUndefined();
+      expect(request({ kind, hashes: [hashes[0], hashes[0]] })).toBeUndefined();
+      expect(request({ kind, hashes: ['--abort'] })).toBeUndefined();
+      expect(
+        request({ kind, hashes: Array.from({ length: 101 }, (_, i) => i.toString(16).padStart(40, '0')) }),
+      ).toBeUndefined();
+    }
   });
 
   it('accepts known typed messages and rejects malformed payloads', async () => {

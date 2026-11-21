@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -534,6 +534,14 @@ describe('GitOperationService', () => {
       [{ kind: 'pull' }, ['pull']],
       [{ kind: 'cherryPick', hash: 'abc1234' }, ['cherry-pick', 'abc1234']],
       [{ kind: 'revert', hash: 'abc1234' }, ['revert', '--no-edit', 'abc1234']],
+      [
+        { kind: 'cherryPickCommits', hashes: ['ccc3333', 'bbb2222', 'aaa1111'] },
+        ['cherry-pick', 'aaa1111', 'bbb2222', 'ccc3333'],
+      ],
+      [
+        { kind: 'revertCommits', hashes: ['ccc3333', 'bbb2222', 'aaa1111'] },
+        ['revert', '--no-edit', 'ccc3333', 'bbb2222', 'aaa1111'],
+      ],
       [{ kind: 'merge', ref: 'feature/login' }, ['merge', '--no-edit', 'feature/login']],
       [{ kind: 'rebase', ref: 'main' }, ['rebase', 'main']],
       [{ kind: 'reset', hash: 'abc1234', mode: 'hard' }, ['reset', '--hard', 'abc1234', '--']],
@@ -917,6 +925,163 @@ describe('GitOperationService', () => {
     await service.run(picking, { kind: 'rebaseAbort' }, { confirm: () => Promise.resolve(true) });
     expect(await git(fixture.path, 'rev-parse', 'HEAD')).toBe(head);
     expect(await git(fixture.path, 'status', '--porcelain')).toBe('');
+  });
+
+  describe('several commits at once', () => {
+    const confirm = () => Promise.resolve(true);
+    const subjects = async (cwd: string, count: number) =>
+      (await git(cwd, 'log', '--format=%s', `-${String(count)}`)).split('\n');
+
+    it('cherry-picks non-adjacent commits oldest first, after confirming', async () => {
+      const { GitOperationService } = await import('../../src/git/GitOperationService');
+      const fixture = await createFixtureRepository();
+      await git(fixture.path, 'switch', '-q', '-c', 'feature');
+      const first = await commitFile(fixture.path, 'a.txt', 'a\n', 'add a');
+      await commitFile(fixture.path, 'skip.txt', 'skip\n', 'not picked');
+      const second = await commitFile(fixture.path, 'a.txt', 'a\nmore\n', 'extend a');
+      const third = await commitFile(fixture.path, 'c 中文.txt', 'c\n', 'add c');
+      await git(fixture.path, 'switch', '-q', 'main');
+      const service = new GitOperationService(new RealGitRunner());
+      const asked = vi.fn(confirm);
+
+      const result = await service.run(
+        fixture.summary,
+        { kind: 'cherryPickCommits', hashes: [third, second, first] },
+        { confirm: asked },
+      );
+
+      expect(asked).toHaveBeenCalledWith(expect.objectContaining({ title: 'Cherry-pick 3 commits onto main?' }));
+      expect(result.notice).toBeUndefined();
+      expect(await subjects(fixture.path, 3)).toEqual(['add c', 'extend a', 'add a']);
+      await expect(git(fixture.path, 'cat-file', '-e', 'HEAD:skip.txt')).rejects.toThrow();
+    });
+
+    it('does nothing when the confirmation is declined', async () => {
+      const { GitOperationService } = await import('../../src/git/GitOperationService');
+      const fixture = await createFixtureRepository();
+      await git(fixture.path, 'switch', '-q', '-c', 'feature');
+      const one = await commitFile(fixture.path, 'a.txt', 'a\n', 'add a');
+      const two = await commitFile(fixture.path, 'b.txt', 'b\n', 'add b');
+      await git(fixture.path, 'switch', '-q', 'main');
+      const head = await git(fixture.path, 'rev-parse', 'HEAD');
+      const service = new GitOperationService(new RealGitRunner());
+
+      const result = await service.run(
+        fixture.summary,
+        { kind: 'revertCommits', hashes: [two, one] },
+        { confirm: () => Promise.resolve(false) },
+      );
+      expect(result.cancelled).toBe(true);
+      expect(await git(fixture.path, 'rev-parse', 'HEAD')).toBe(head);
+    });
+
+    it('skips commits whose changes are already there and picks the rest', async () => {
+      const { GitOperationService } = await import('../../src/git/GitOperationService');
+      const fixture = await createFixtureRepository();
+      await git(fixture.path, 'switch', '-q', '-c', 'feature');
+      const first = await commitFile(fixture.path, 'a.txt', 'a\n', 'add a');
+      const dup = await commitFile(fixture.path, 'shared.txt', 'shared\n', 'shared change');
+      const last = await commitFile(fixture.path, 'b.txt', 'b\n', 'add b');
+      await git(fixture.path, 'switch', '-q', 'main');
+      await commitFile(fixture.path, 'shared.txt', 'shared\n', 'same change made again');
+      const service = new GitOperationService(new RealGitRunner());
+
+      const result = await service.run(
+        fixture.summary,
+        { kind: 'cherryPickCommits', hashes: [last, dup, first] },
+        { confirm },
+      );
+
+      expect(result.notice).toContain(dup.slice(0, 8));
+      expect(await subjects(fixture.path, 3)).toEqual(['add b', 'add a', 'same change made again']);
+      await expect(git(fixture.path, 'rev-parse', '-q', '--verify', 'CHERRY_PICK_HEAD')).rejects.toThrow();
+      expect(await git(fixture.path, 'status', '--porcelain')).toBe('');
+    });
+
+    it('stops on a conflict; Continue picks the rest and Abort restores the original HEAD', async () => {
+      const { GitOperationService } = await import('../../src/git/GitOperationService');
+      const setup = async () => {
+        const fixture = await createFixtureRepository();
+        await git(fixture.path, 'switch', '-q', '-c', 'feature');
+        const first = await commitFile(fixture.path, 'a.txt', 'a\n', 'add a');
+        const clash = await commitFile(fixture.path, 'base.txt', 'feature\n', 'feature edit');
+        const last = await commitFile(fixture.path, 'b.txt', 'b\n', 'add b');
+        await git(fixture.path, 'switch', '-q', 'main');
+        const head = await commitFile(fixture.path, 'base.txt', 'main\n', 'main edit');
+        return { fixture, hashes: [last, clash, first], head };
+      };
+      const service = new GitOperationService(new RealGitRunner());
+
+      const resolved = await setup();
+      await expect(
+        service.run(resolved.fixture.summary, { kind: 'cherryPickCommits', hashes: resolved.hashes }, { confirm }),
+      ).rejects.toThrow();
+      expect(await subjects(resolved.fixture.path, 2)).toEqual(['add a', 'main edit']);
+      await writeFile(join(resolved.fixture.path, 'base.txt'), 'resolved\n');
+      await git(resolved.fixture.path, 'add', 'base.txt');
+      const picking = { ...resolved.fixture.summary, operationState: 'cherry-pick' as const };
+      await service.run(picking, { kind: 'rebaseContinue' }, { confirm });
+      expect(await subjects(resolved.fixture.path, 4)).toEqual(['add b', 'feature edit', 'add a', 'main edit']);
+
+      const aborted = await setup();
+      await expect(
+        service.run(aborted.fixture.summary, { kind: 'cherryPickCommits', hashes: aborted.hashes }, { confirm }),
+      ).rejects.toThrow();
+      const abortPicking = { ...aborted.fixture.summary, operationState: 'cherry-pick' as const };
+      await service.run(abortPicking, { kind: 'rebaseAbort' }, { confirm });
+      expect(await git(aborted.fixture.path, 'rev-parse', 'HEAD')).toBe(aborted.head);
+      expect(await git(aborted.fixture.path, 'status', '--porcelain')).toBe('');
+    });
+
+    it('reverts newest first, one revert commit each', async () => {
+      const { GitOperationService } = await import('../../src/git/GitOperationService');
+      const fixture = await createFixtureRepository();
+      const one = await commitFile(fixture.path, 'a.txt', 'a\n', 'add a');
+      await commitFile(fixture.path, 'keep.txt', 'keep\n', 'keep me');
+      const two = await commitFile(fixture.path, 'a.txt', 'a\nmore\n', 'extend a');
+      const service = new GitOperationService(new RealGitRunner());
+      const asked = vi.fn(confirm);
+
+      await service.run(fixture.summary, { kind: 'revertCommits', hashes: [two, one] }, { confirm: asked });
+
+      expect(asked).toHaveBeenCalledWith(expect.objectContaining({ title: 'Revert 2 commits on main?' }));
+      expect(await subjects(fixture.path, 2)).toEqual(['Revert "add a"', 'Revert "extend a"']);
+      await expect(git(fixture.path, 'cat-file', '-e', 'HEAD:a.txt')).rejects.toThrow();
+      expect(await git(fixture.path, 'show', 'HEAD:keep.txt')).toBe('keep');
+    });
+
+    it('skips a commit that is already reverted', async () => {
+      const { GitOperationService } = await import('../../src/git/GitOperationService');
+      const fixture = await createFixtureRepository();
+      const one = await commitFile(fixture.path, 'a.txt', 'a\n', 'add a');
+      const two = await commitFile(fixture.path, 'b.txt', 'b\n', 'add b');
+      await git(fixture.path, 'revert', '--no-edit', two);
+      const service = new GitOperationService(new RealGitRunner());
+
+      const result = await service.run(fixture.summary, { kind: 'revertCommits', hashes: [two, one] }, { confirm });
+
+      expect(result.notice).toContain(two.slice(0, 8));
+      expect(await subjects(fixture.path, 2)).toEqual(['Revert "add a"', 'Revert "add b"']);
+      expect(await git(fixture.path, 'status', '--porcelain')).toBe('');
+    });
+
+    it('leaves the repository alone when local changes are in the way', async () => {
+      const { GitOperationService } = await import('../../src/git/GitOperationService');
+      const fixture = await createFixtureRepository();
+      await git(fixture.path, 'switch', '-q', '-c', 'feature');
+      const one = await commitFile(fixture.path, 'base.txt', 'feature\n', 'feature edit');
+      const two = await commitFile(fixture.path, 'b.txt', 'b\n', 'add b');
+      await git(fixture.path, 'switch', '-q', 'main');
+      const head = await git(fixture.path, 'rev-parse', 'HEAD');
+      await writeFile(join(fixture.path, 'base.txt'), 'local edit\n');
+      const service = new GitOperationService(new RealGitRunner());
+
+      await expect(
+        service.run(fixture.summary, { kind: 'cherryPickCommits', hashes: [two, one] }, { confirm }),
+      ).rejects.toThrow();
+      expect(await git(fixture.path, 'rev-parse', 'HEAD')).toBe(head);
+      expect(await readFile(join(fixture.path, 'base.txt'), 'utf8')).toBe('local edit\n');
+    });
   });
 
   it('rejects rebase controls after the rebase has ended', async () => {

@@ -43,7 +43,8 @@ Uninstall the original **Git Log** (`ascenx.git-log`) first if you have it.
 | Rebase onto master | **Fetch**, then right-click `origin/master` → **Rebase Current onto** |
 | See what master has that I don't | Right-click the branch → **Compare with Current**, or **←** / **→** in the **Branch** filter |
 | Merge with options | Right-click a branch → **Merge…**: merge commit, fast-forward only, squash, or stop before committing |
-| Take a commit from another branch | Show that branch → right-click the commit → **Cherry-pick** |
+| Take commits from another branch | Show that branch → right-click a commit → **Cherry-pick**; select several (⌘/Ctrl- or Shift-click) for **Cherry-pick N Commits** |
+| Undo several commits with revert commits | Select them → right-click → **Revert N Commits** (one revert commit each) |
 | Resolve conflicts | Handle them in the Commit window, then **Continue** (or **Skip** / **Abort**) in the banner |
 | See where my branch stands | The status bar on the right shows `main ↑2 ↓1`; click it for Branches |
 | Switch branches with uncommitted work | Check out as usual; if your changes are in the way, pick **Smart Checkout** to carry them over |

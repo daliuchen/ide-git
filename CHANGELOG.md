@@ -2,6 +2,11 @@
 
 All notable changes to IDE Git are documented in this file.
 
+## 0.14.0
+
+- Cherry-pick and revert several commits at once: select them in the Log (⌘/Ctrl-click or Shift-click, adjacent or not) and right-click → **Cherry-pick N Commits** or **Revert N Commits**. Cherry-picks go oldest first; reverts go newest first with one revert commit each. Commits whose changes are already there are skipped and listed; a conflict stops so you can continue, skip or abort.
+- Cherry-pick and Revert are disabled for merge commits instead of failing with Git's error.
+
 ## 0.13.0
 
 - Worktrees: `IDE Git: Manage Worktrees…` lists the repository's worktrees and creates one for a local, remote or new branch (in a folder next to the repository by default), switches this window to it, opens it in a new window, adds it to the workspace, reveals it or removes it. A worktree with uncommitted changes is only deleted after a second confirmation; stale entries can be pruned.

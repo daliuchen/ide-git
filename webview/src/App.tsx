@@ -3964,6 +3964,54 @@ export function App() {
               ) : null}
               {!selectedRepository?.isBare && !selectedRepository?.operationState ? (
                 <>
+              {(() => {
+                const count = contextMenu.commits.length;
+                const hashes = contextMenu.commits.map((commit) => commit.hash);
+                const hasMerge = contextMenu.commits.some((commit) => commit.parents.length > 1);
+                const reason = hasMerge
+                  ? `${count === 1 ? 'Merge commits' : 'The selection includes a merge commit, which'} can't be cherry-picked or reverted here`
+                  : count > 100
+                    ? 'Select no more than 100 commits'
+                    : undefined;
+                const disabled = selectedOperationInFlight || reason !== undefined;
+                const suffix = count === 1 ? '' : ` ${String(count)} Commits`;
+                return (
+                  <>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={disabled}
+                      title={reason}
+                      onClick={() =>
+                        runOperation(
+                          count === 1
+                            ? { kind: 'cherryPick', hash: contextMenu.commit.hash }
+                            : { kind: 'cherryPickCommits', hashes },
+                          contextMenu.repositoryId,
+                        )
+                      }
+                    >
+                      {`Cherry-pick${suffix}`}
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={disabled}
+                      title={reason}
+                      onClick={() =>
+                        runOperation(
+                          count === 1
+                            ? { kind: 'revert', hash: contextMenu.commit.hash }
+                            : { kind: 'revertCommits', hashes },
+                          contextMenu.repositoryId,
+                        )
+                      }
+                    >
+                      {`Revert${suffix}`}
+                    </button>
+                  </>
+                );
+              })()}
               {contextMenu.commits.length === 1 ? (
                 <>
                   <button
@@ -4028,30 +4076,6 @@ export function App() {
                 }}
               >
                 New Tag…
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() =>
-                  runOperation(
-                    { kind: 'cherryPick', hash: contextMenu.commit.hash },
-                    contextMenu.repositoryId,
-                  )
-                }
-              >
-                Cherry-pick
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() =>
-                  runOperation(
-                    { kind: 'revert', hash: contextMenu.commit.hash },
-                    contextMenu.repositoryId,
-                  )
-                }
-              >
-                Revert
               </button>
               <button
                 type="button"
