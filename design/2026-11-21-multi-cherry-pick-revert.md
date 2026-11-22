@@ -89,5 +89,5 @@ Log 列表来自 `git log --date-order`，子提交一定排在父提交前面�
 - **空的 revert 不写 `REVERT_HEAD`**：cherry-pick 变空时 Git 留下 `CHERRY_PICK_HEAD`，revert 变空时却没有，只输出「nothing to commit」。所以判断「停在一个空提交上」改为：有 `CHERRY_PICK_HEAD` / `REVERT_HEAD`，或者 Git 输出含「nothing to commit」时取 `.git/sequencer/todo` 第一行的提交。被本地改动挡住时 Git 的输出不同，不会被误判成空提交而跳过。
 - 单个 Cherry-pick 也改走同一段逻辑（`runSequence`），行为不变；单个 Revert 仍按原来直接执行。
 - 合并提交置灰：单选、多选都生效。
-- 多选时菜单里原有的 New Branch / Merge / Reset / Copy Hash 等仍只作用于右键点的那个提交，这是原来就有的行为，本次未改。
+- 多选时菜单里原有的 New Branch / Merge / Reset / Copy Hash 等只作用于右键点的那个提交，这是原来就有的行为；0.14.1 起多选时隐藏这些单提交操作（用户同意，单独一个提交）。
 - 验证：单测（协议校验、参数顺序、菜单数量与置灰）；真实临时仓库（不连续 cherry-pick 顺序、带中文文件名、取消确认不动仓库、跳过已存在的改动、冲突后 Continue 完成剩余 / Abort 回到原 HEAD、revert 各生成一个提交、跳过已撤销的提交、本地改动挡路时仓库不变）；e2e `multi-cherry-pick` 4 项；集成测试通过。

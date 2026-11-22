@@ -3836,6 +3836,9 @@ export function App() {
                   </button>
                 </>
               ) : null}
+              {/* Single-commit actions would silently act on the clicked commit only, so a multi-selection hides them. */}
+              {contextMenu.commits.length === 1 ? (
+                <>
               <button
                 type="button"
                 role="menuitem"
@@ -3871,6 +3874,8 @@ export function App() {
               >
                 Compare with Local
               </button>
+                </>
+              ) : null}
               <button
                 type="button"
                 role="menuitem"
@@ -4047,6 +4052,8 @@ export function App() {
                   ) : null}
                 </>
               ) : null}
+              {contextMenu.commits.length === 1 ? (
+                <>
               <button
                 type="button"
                 role="menuitem"
@@ -4169,6 +4176,10 @@ export function App() {
                 : null}
                 </>
               ) : null}
+                </>
+              ) : null}
+              {contextMenu.commits.length === 1 ? (
+                <>
               <button
                 type="button"
                 role="menuitem"
@@ -4214,6 +4225,8 @@ export function App() {
               >
                 Copy Full Message
               </button>
+                </>
+              ) : null}
             </>
           ) : null}
           {contextMenu.kind === 'file' ? (
