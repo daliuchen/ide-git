@@ -2,6 +2,10 @@
 
 All notable changes to IDE Git are documented in this file.
 
+## 0.14.1
+
+- With several commits selected, the Log context menu only offers actions that apply to the whole selection (Cherry-pick, Revert, Drop, Squash, Create Patch). Single-commit actions such as Compare, New Branch, Merge, Reset and Copy Hash used to act on the clicked commit only; they now appear only when one commit is selected.
+
 ## 0.14.0
 
 - Cherry-pick and revert several commits at once: select them in the Log (⌘/Ctrl-click or Shift-click, adjacent or not) and right-click → **Cherry-pick N Commits** or **Revert N Commits**. Cherry-picks go oldest first; reverts go newest first with one revert commit each. Commits whose changes are already there are skipped and listed; a conflict stops so you can continue, skip or abort.

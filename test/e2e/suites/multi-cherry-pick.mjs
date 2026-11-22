@@ -40,6 +40,11 @@ export default {
     await sleep(500);
     const pick = log.getByRole('menuitem', { name: 'Cherry-pick 2 Commits' });
     check('the menu offers Cherry-pick 2 Commits', (await pick.count()) === 1);
+    check(
+      'single-commit actions are hidden for a multi-selection',
+      (await log.getByRole('menuitem', { name: 'New Branch…' }).count()) === 0 &&
+        (await log.getByRole('menuitem', { name: 'Copy Hash' }).count()) === 0,
+    );
     await shot('menu');
     await pick.click();
     await confirm('Cherry-pick');

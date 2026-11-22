@@ -922,6 +922,11 @@ describe('WorkbenchApp', () => {
     fireEvent.contextMenu(oldestRow);
     menu = screen.getByRole('menu', { name: 'commit actions' });
     expect(within(menu).queryByRole('menuitem', { name: 'Cherry-pick' })).not.toBeInTheDocument();
+    // Actions that only use the clicked commit are hidden while several are selected.
+    for (const name of ['Compare with Parent', 'New Branch…', 'Merge into Current', 'Hard Reset…', 'Copy Hash']) {
+      expect(within(menu).queryByRole('menuitem', { name })).not.toBeInTheDocument();
+    }
+    expect(within(menu).getByRole('menuitem', { name: 'Create Patch…' })).toBeInTheDocument();
     fireEvent.click(within(menu).getByRole('menuitem', { name: 'Cherry-pick 2 Commits' }));
     expect(postedMessages.at(-1)).toMatchObject({
       type: 'runOperation',
