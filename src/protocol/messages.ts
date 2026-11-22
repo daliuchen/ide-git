@@ -179,6 +179,9 @@ export type GitOperationRequest =
   | { kind: 'pushHead'; remote: string; branch: string }
   | { kind: 'cherryPick'; hash: string }
   | { kind: 'revert'; hash: string }
+  /** Newest first, as listed in the Log; cherry-picked oldest first, reverted newest first. */
+  | { kind: 'cherryPickCommits'; hashes: string[] }
+  | { kind: 'revertCommits'; hashes: string[] }
   | {
       kind: 'merge';
       ref: string;
@@ -408,6 +411,16 @@ function isCommitRange(value: unknown): value is string[] {
   return (
     Array.isArray(value) &&
     value.length >= 2 &&
+    value.length <= MAX_COMMIT_RANGE &&
+    value.every(isHash) &&
+    new Set(value).size === value.length
+  );
+}
+
+function isCommitList(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length >= 1 &&
     value.length <= MAX_COMMIT_RANGE &&
     value.every(isHash) &&
     new Set(value).size === value.length
@@ -734,6 +747,9 @@ function isGitOperationRequest(value: unknown): value is GitOperationRequest {
     case 'cherryPick':
     case 'revert':
       return isHash(value.hash);
+    case 'cherryPickCommits':
+    case 'revertCommits':
+      return isCommitList(value.hashes);
     case 'merge':
       return (
         isSafeGitToken(value.ref) &&

@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { normalize } from 'node:path';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { GitOperationRequest, RebaseStep } from '../protocol/messages';
 import type { RepositorySummary } from '../shared/models';
@@ -251,6 +251,11 @@ export function buildOperationArguments(
       return ['cherry-pick', validateHash(operation.hash)];
     case 'revert':
       return ['revert', '--no-edit', validateHash(operation.hash)];
+    case 'cherryPickCommits':
+      // The Log lists newest first; apply oldest first so each commit lands on its parent's changes.
+      return ['cherry-pick', ...[...operation.hashes].reverse().map(validateHash)];
+    case 'revertCommits':
+      return ['revert', '--no-edit', ...operation.hashes.map(validateHash)];
     case 'merge':
       return mergeArguments(operation);
     case 'rebase':
@@ -514,6 +519,23 @@ export function getOperationConfirmation(
       confirmLabel: 'Force Push with Lease',
       destructive: true,
     };
+  }
+  if (operation.kind === 'cherryPickCommits' || operation.kind === 'revertCommits') {
+    const count = String(operation.hashes.length);
+    const target = repository.currentBranch ?? 'HEAD';
+    return operation.kind === 'cherryPickCommits'
+      ? {
+          title: `Cherry-pick ${count} commits onto ${target}?`,
+          detail: `Repository “${repository.displayName}” will apply them oldest first, one commit each. Commits whose changes are already there are skipped; on a conflict it stops so you can continue or abort.`,
+          confirmLabel: 'Cherry-pick',
+          destructive: true,
+        }
+      : {
+          title: `Revert ${count} commits on ${target}?`,
+          detail: `Repository “${repository.displayName}” will revert them newest first, creating one revert commit for each. On a conflict it stops so you can continue or abort.`,
+          confirmLabel: 'Revert',
+          destructive: true,
+        };
   }
   if (operation.kind === 'dropCommits' || operation.kind === 'squashCommits') {
     const count = operation.hashes.length;
@@ -822,7 +844,14 @@ export class GitOperationService {
         } else if (preparedOperation.kind === 'getFromRevision') {
           await this.getFromRevision(freshRepository, preparedOperation.hash, preparedOperation.paths);
         } else if (preparedOperation.kind === 'cherryPick') {
-          return this.cherryPick(freshRepository, preparedOperation.hash);
+          return this.runSequence(freshRepository, 'cherry-pick', buildOperationArguments(preparedOperation), 'cherryPick completed.');
+        } else if (preparedOperation.kind === 'cherryPickCommits' || preparedOperation.kind === 'revertCommits') {
+          return this.runSequence(
+            freshRepository,
+            preparedOperation.kind === 'cherryPickCommits' ? 'cherry-pick' : 'revert',
+            buildOperationArguments(preparedOperation),
+            `${preparedOperation.kind} completed.`,
+          );
         } else if (isCheckoutOperation(preparedOperation)) {
           return this.checkout(freshRepository, preparedOperation, options);
         } else {
@@ -1172,29 +1201,65 @@ export class GitOperationService {
     }
   }
 
-  private async cherryPick(repository: RepositorySummary, hash: string): Promise<GitOperationResult> {
+  /**
+   * Runs a cherry-pick or revert of one or more commits. When Git stops on a commit whose changes are
+   * already there (no conflict, nothing to commit), skips it and goes on with the rest; any other stop
+   * (a conflict, a dirty work tree) is left for the user.
+   */
+  private async runSequence(
+    repository: RepositorySummary,
+    command: 'cherry-pick' | 'revert',
+    args: string[],
+    message: string,
+  ): Promise<GitOperationResult> {
     const cwd = fileURLToPath(repository.rootUri);
-    try {
-      await this.runner.run(['cherry-pick', validateHash(hash)], { cwd, timeoutMs: 10 * 60_000 });
-      return { message: 'cherryPick completed.' };
-    } catch (error) {
-      if (!(error instanceof GitCommandError) || error.cancelled) throw error;
-      const stillPicking = await this.runner
-        .run(['rev-parse', '-q', '--verify', 'CHERRY_PICK_HEAD'], { cwd, timeoutMs: 30_000 })
-        .then(() => true, () => false);
-      const conflicted = await this.runner
-        .run(['diff', '--name-only', '--diff-filter=U'], { cwd, timeoutMs: 30_000 })
-        .then((result) => result.stdout.toString('utf8').trim() !== '');
-      const nothingStaged = await this.runner
-        .run(['diff', '--cached', '--quiet'], { cwd, timeoutMs: 30_000 })
-        .then(() => true, () => false);
-      if (!stillPicking || conflicted || !nothingStaged) throw error;
-      await this.runner.run(['cherry-pick', '--skip'], { cwd, timeoutMs: 60_000 });
-      return {
-        message: 'cherryPick completed.',
-        notice: `Nothing to cherry-pick: the changes of ${hash.slice(0, 8)} are already in the current branch.`,
-      };
+    const headRef = command === 'cherry-pick' ? 'CHERRY_PICK_HEAD' : 'REVERT_HEAD';
+    const skipped: string[] = [];
+    let next = args;
+    for (;;) {
+      try {
+        await this.runner.run(next, { cwd, timeoutMs: 10 * 60_000 });
+        break;
+      } catch (error) {
+        if (!(error instanceof GitCommandError) || error.cancelled) throw error;
+        const stopped =
+          (await this.runner
+            .run(['rev-parse', '-q', '--verify', headRef], { cwd, timeoutMs: 30_000 })
+            .then((result) => result.stdout.toString('utf8').trim(), () => '')) ||
+          (await this.emptySequenceStep(repository, error));
+        const conflicted = await this.runner
+          .run(['diff', '--name-only', '--diff-filter=U'], { cwd, timeoutMs: 30_000 })
+          .then((result) => result.stdout.toString('utf8').trim() !== '');
+        const nothingStaged = await this.runner
+          .run(['diff', '--cached', '--quiet'], { cwd, timeoutMs: 30_000 })
+          .then(() => true, () => false);
+        if (!stopped || conflicted || !nothingStaged) throw error;
+        skipped.push(stopped.slice(0, 8));
+        next = [command, '--skip'];
+      }
     }
+    if (skipped.length === 0) return { message };
+    const list = skipped.join(', ');
+    const notice =
+      command === 'cherry-pick'
+        ? skipped.length === 1
+          ? `Nothing to cherry-pick: the changes of ${list} are already in the current branch.`
+          : `Skipped ${String(skipped.length)} commits whose changes are already in the current branch: ${list}.`
+        : `Skipped ${String(skipped.length)} commit${skipped.length === 1 ? '' : 's'} already undone in the current branch: ${list}.`;
+    return { message, notice };
+  }
+
+  /**
+   * A revert that turns out empty stops without writing REVERT_HEAD; Git then says "nothing to commit"
+   * and the commit it stopped on is the first line of the sequencer's todo list.
+   */
+  private async emptySequenceStep(repository: RepositorySummary, error: GitCommandError): Promise<string> {
+    const output = `${error.stdout.toString('utf8')}\n${error.stderr.toString('utf8')}`;
+    if (!output.includes('nothing to commit')) return '';
+    const todo = await readFile(join(fileURLToPath(repository.gitDirUri), 'sequencer', 'todo'), 'utf8').catch(() => '');
+    const abbreviated = /^(?:pick|revert)\s+([0-9a-f]{4,64})\b/mu.exec(todo)?.[1];
+    if (!abbreviated) return '';
+    return this.revParse(fileURLToPath(repository.rootUri), abbreviated).catch(() => abbreviated);
   }
 
   private async getFromRevision(repository: RepositorySummary, hash: string, paths: readonly string[]): Promise<void> {

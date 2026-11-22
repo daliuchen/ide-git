@@ -56,14 +56,14 @@ function completeLatestOperation(): void {
   });
 }
 
-function initializeCommitRangeFixture() {
+function initializeCommitRangeFixture(options: { newestIsMerge?: boolean } = {}) {
   const newest = 'c'.repeat(40);
   const middle = 'b'.repeat(40);
   const oldest = 'a'.repeat(40);
   const commits = [
     {
       hash: newest,
-      parents: [middle],
+      parents: options.newestIsMerge ? [middle, 'e'.repeat(40)] : [middle],
       subject: 'newest commit',
       authorName: 'Alice',
       authorEmail: 'alice@example.com',
@@ -905,6 +905,55 @@ describe('WorkbenchApp', () => {
       hash: newest,
       hashes: [newest],
     });
+  });
+
+  it('cherry-picks or reverts several selected commits at once', () => {
+    const { newest, oldest } = initializeCommitRangeFixture();
+    const newestRow = screen.getByText('newest commit').closest('[role="row"]') as HTMLElement;
+    const oldestRow = screen.getByText('oldest commit').closest('[role="row"]') as HTMLElement;
+    fireEvent.click(newestRow);
+    fireEvent.contextMenu(newestRow);
+    let menu = screen.getByRole('menu', { name: 'commit actions' });
+    expect(within(menu).getByRole('menuitem', { name: 'Cherry-pick' })).toBeEnabled();
+    expect(within(menu).getByRole('menuitem', { name: 'Revert' })).toBeEnabled();
+    fireEvent.keyDown(menu, { key: 'Escape' });
+
+    fireEvent.click(oldestRow, { metaKey: true });
+    fireEvent.contextMenu(oldestRow);
+    menu = screen.getByRole('menu', { name: 'commit actions' });
+    expect(within(menu).queryByRole('menuitem', { name: 'Cherry-pick' })).not.toBeInTheDocument();
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Cherry-pick 2 Commits' }));
+    expect(postedMessages.at(-1)).toMatchObject({
+      type: 'runOperation',
+      operation: { kind: 'cherryPickCommits', hashes: [newest, oldest] },
+    });
+
+  });
+
+  it('reverts several selected commits at once', () => {
+    const { newest, oldest } = initializeCommitRangeFixture();
+    const newestRow = screen.getByText('newest commit').closest('[role="row"]') as HTMLElement;
+    const oldestRow = screen.getByText('oldest commit').closest('[role="row"]') as HTMLElement;
+    fireEvent.click(newestRow);
+    fireEvent.click(oldestRow, { metaKey: true });
+    fireEvent.contextMenu(oldestRow);
+    const menu = screen.getByRole('menu', { name: 'commit actions' });
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Revert 2 Commits' }));
+    expect(postedMessages.at(-1)).toMatchObject({
+      type: 'runOperation',
+      operation: { kind: 'revertCommits', hashes: [newest, oldest] },
+    });
+  });
+
+  it('disables cherry-pick and revert when the selection includes a merge commit', () => {
+    initializeCommitRangeFixture({ newestIsMerge: true });
+    const newestRow = screen.getByText('newest commit').closest('[role="row"]') as HTMLElement;
+    fireEvent.click(newestRow);
+    fireEvent.click(screen.getByText('middle commit').closest('[role="row"]') as HTMLElement, { shiftKey: true });
+    fireEvent.contextMenu(newestRow);
+    const menu = screen.getByRole('menu', { name: 'commit actions' });
+    expect(within(menu).getByRole('menuitem', { name: 'Cherry-pick 2 Commits' })).toBeDisabled();
+    expect(within(menu).getByRole('menuitem', { name: 'Revert 2 Commits' })).toBeDisabled();
   });
 
   it('preserves a valid commit range selection across repository refreshes', () => {
