@@ -2,6 +2,10 @@
 
 All notable changes to IDE Git are documented in this file.
 
+## 0.15.0
+
+- `⌘⇧K` (`Ctrl+Shift+K` on Windows and Linux) opens the Push dialog for the repository of the active file, like the IDE shortcut. It replaces the editor's default Delete Line binding on that key; you can rebind it in Keyboard Shortcuts.
+
 ## 0.14.1
 
 - With several commits selected, the Log context menu only offers actions that apply to the whole selection (Cherry-pick, Revert, Drop, Squash, Create Patch). Single-commit actions such as Compare, New Branch, Merge, Reset and Copy Hash used to act on the clicked commit only; they now appear only when one commit is selected.

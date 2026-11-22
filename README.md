@@ -50,7 +50,7 @@ Uninstall the original **Git Log** (`ascenx.git-log`) first if you have it.
 | Switch branches with uncommitted work | Check out as usual; if your changes are in the way, pick **Smart Checkout** to carry them over |
 | Add or change a remote | ⚙ next to **Remote** in the Log's branch list, or `IDE Git: Manage Remotes…` |
 | Work on several branches at once (worktrees) | **Worktrees** in the Log's branch list (double-click to switch this window), **New Worktree from Here…** on a branch, or `IDE Git: Manage Worktrees…` |
-| Push or pull | **Push…** / **Pull** on the Log toolbar |
+| Push or pull | `⌘⇧K` (`Ctrl+Shift+K`) or **Push…** on the Log toolbar; **Pull** next to it |
 | Put work aside | Right-click files → **Shelve Changes…**; find them under **Stashes** on the Log toolbar, with their branch and time |
 | Review a commit file by file | Double-click a file in **Changed Files**, then **F7** / **Shift+F7**: after the last change, press again to open the next file (also in the Commit window); the list selects the file being shown |
 | See who changed each line | Editor right-click → *IDE Git → Annotate with Git Blame*; hover a line → **Show in Git Log** to jump to its commit, or **Annotate Previous Revision** to see who wrote it before |
